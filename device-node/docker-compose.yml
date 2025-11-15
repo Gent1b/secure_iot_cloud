@@ -1,16 +1,14 @@
-version: "3.8"
-
 services:
   publisher_device:
-    build:
-      context: ../publisher
+    image: ghcr.io/gent1b/iot-publisher:latest
+    pull_policy: always
     env_file:
       - ../.env
     environment:
-      - BROKER=${BROKER}
-      - MQTT_TOPIC=${MQTT_TOPIC}
-      - DEVICES_PER_CONTAINER=${DEVICES_PER_CONTAINER:-100}
-      - PUBLISH_INTERVAL=${PUBLISH_INTERVAL:-1}
+      BROKER: "${BROKER}"
+      MQTT_TOPIC: "${MQTT_TOPIC}"
+      DEVICES_PER_CONTAINER: "${DEVICES_PER_CONTAINER:-100}"
+      PUBLISH_INTERVAL: "${PUBLISH_INTERVAL:-1}"
     deploy:
-      replicas: 3 
+      replicas: 3
     restart: unless-stopped

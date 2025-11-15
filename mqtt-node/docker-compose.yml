@@ -7,8 +7,6 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto_config:/mosquitto/config
-      # if your mosquitto.conf logs to /mosquitto/log, mount a log dir:
-      # - ./mosquitto_logs:/mosquitto/log
     healthcheck:
       test: ["CMD", "sh", "-c", "nc -z localhost 1883"]
       interval: 10s
@@ -16,10 +14,10 @@ services:
     restart: unless-stopped
 
   broker_monitor:
-    build:
-      context: ../mosquitto_log    # 👈 folder at repo root with Dockerfile + script
+    image: ghcr.io/gent1b/iot-broker-monitor:latest   # <-- GHCR image
+    pull_policy: always
     depends_on:
       - mqtt_broker
     ports:
-      - "8001:8001"                # expose metrics / UI, same as before
+      - "8001:8001"
     restart: unless-stopped
