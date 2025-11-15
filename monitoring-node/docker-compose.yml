@@ -19,7 +19,6 @@ services:
       - "3000:3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning   # your dashboards or datasources
-      - ./grafana_data:/var/lib/grafana                    # <-- THIS MAKES DASHBOARDS PERSIST
     depends_on:
       - prometheus
     restart: unless-stopped
