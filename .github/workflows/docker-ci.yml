@@ -39,9 +39,11 @@ jobs:
           push: true
           tags: ghcr.io/gent1b/iot-publisher:latest
 
-      - name: Build and push broker-monitor image
+      - name: Build and push broker-monitor
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./mosquitto_log
+          file: ./mosquitto_log/Dockerfile
           push: true
           tags: ghcr.io/gent1b/iot-broker-monitor:latest
+
