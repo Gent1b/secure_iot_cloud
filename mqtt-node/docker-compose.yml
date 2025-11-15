@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  mqtt_broker:
+    image: eclipse-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto_config:/mosquitto/config
+      # if your mosquitto.conf logs to /mosquitto/log, mount a log dir:
+      # - ./mosquitto_logs:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 1883"]
+      interval: 10s
+      retries: 3
+    restart: unless-stopped
+
+  broker_monitor:
+    build:
+      context: ../mosquitto_log    # 👈 folder at repo root with Dockerfile + script
+    depends_on:
+      - mqtt_broker
+    ports:
+      - "8001:8001"                # expose metrics / UI, same as before
+    restart: unless-stopped

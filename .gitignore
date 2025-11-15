@@ -1,0 +1,49 @@
+# ============================
+# Environment files
+# ============================
+.env
+*.env
+
+# ============================
+# InfluxDB runtime data
+# (local DB files, recreated at runtime)
+# ============================
+cloud-node/influxdb_data/
+cloud-node/influxdb_data/**
+
+# If you later bind-mount Grafana data, ignore it too
+grafana_data/
+monitoring-node/grafana_data/
+
+# ============================
+# Python artifacts
+# ============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+*.coverage
+.coverage
+
+# ============================
+# Logs & temp files
+# ============================
+*.log
+*.tmp
+*.swp
+*.swo
+
+# ============================
+# IDE / OS cruft
+# ============================
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ============================
+# Docker misc
+# ============================
+*.pid

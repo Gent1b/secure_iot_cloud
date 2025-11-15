@@ -1,0 +1,85 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: evaluation
+      folder: Rules
+      interval: 30s
+      rules:
+        - uid: fe9aum8z13fuod
+          title: Temperature Spike Alert
+          condition: C
+          for: 0s
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: influxdb
+              model:
+                intervalMs: 1000
+                maxDataPoints: 43200
+                query: "from(bucket: \"iot_data\")\r\n  |> range(start: -5m)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"temperature\")\r\n  |> group(columns: [\"device_id\"])  // Group by device_id\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n"
+                refId: A
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 30
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          annotations:
+            description: |-
+                The device with ID {{ $labels.device_id }} has exceeded the temperature threshold.
+                Current temperature: {{ $values.B }}°C.
+                Please investigate the issue immediately.
+            summary: 'Temperature Alert: Device {{ $labels.device_id }} exceeded the threshold.'
+          labels:
+            device_id: '{{ $$labels.device_id }}'
+          isPaused: false
+          notification_settings:
+            receiver: Discord Alerts
