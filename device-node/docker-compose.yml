@@ -3,12 +3,12 @@ services:
     image: ghcr.io/gent1b/iot-publisher:latest
     pull_policy: always
     env_file:
-      - ../.env
+      - .env
     environment:
       BROKER: "${BROKER}"
       MQTT_TOPIC: "${MQTT_TOPIC}"
-      DEVICES_PER_CONTAINER: "${DEVICES_PER_CONTAINER:-100}"
-      PUBLISH_INTERVAL: "${PUBLISH_INTERVAL:-1}"
+      DEVICES_PER_CONTAINER: "${DEVICES_PER_CONTAINER}"
+      PUBLISH_INTERVAL: "${PUBLISH_INTERVAL}"
     deploy:
       replicas: 3
     restart: unless-stopped

@@ -6,7 +6,7 @@ services:
     volumes:
       - ./influxdb_data:/var/lib/influxdb2
     env_file:
-      - ../.env
+      - .env
     environment:
       DOCKER_INFLUXDB_INIT_MODE: "setup"
       DOCKER_INFLUXDB_INIT_USERNAME: "admin"
@@ -20,15 +20,13 @@ services:
     image: ghcr.io/gent1b/iot-subscriber:latest
     pull_policy: always
     env_file:
-      - ../.env
+      - .env
     environment:
       BROKER: "${BROKER}"
       INFLUXDB_URL: "${INFLUXDB_URL}"
       INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
       INFLUXDB_ORG: "${INFLUXDB_ORG}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
-      SUBSCRIBER_QUEUE_MAX: "10000"
-      INFLUX_BATCH_SIZE: "100"
     ports:
       - "8000:8000"
     depends_on:
@@ -38,17 +36,8 @@ services:
   telegraf:
     image: telegraf:latest
     container_name: telegraf
-    user: "telegraf:0"
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /etc:/host/etc:ro
-    environment:
-      HOST_PROC: "/host/proc"
-      HOST_SYS: "/host/sys"
-      HOST_ETC: "/host/etc"
     ports:
       - "9273:9273"
     depends_on:
