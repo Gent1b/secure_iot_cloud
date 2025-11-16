@@ -37,6 +37,8 @@ services:
     image: telegraf:latest
     container_name: telegraf
     privileged: true
+    security_opt:
+      - apparmor=unconfined
     user: root
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
@@ -50,7 +52,4 @@ services:
       - HOST_ETC=/host/etc
     ports:
       - "9273:9273"
-    depends_on:
-      - influxdb
-      - subscriber
     restart: unless-stopped
