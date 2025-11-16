@@ -1776,7 +1776,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "docker_container_cpu_usage_percent{container_name=~\"cloud-node-influxdb-1|mqtt-node-mqtt_broker-1|cloud-node-subscriber-1\"}\r\n",
+          "expr": "(\r\ndocker_container_cpu_usage_percent{com_docker_compose_project=\"cloud-node\"}\r\n)\r\nor\r\n(\r\ndocker_container_cpu_usage_percent{container_name=\"mqtt-node-mqtt_broker-1\"}\r\n)\r\n\r\n",
           "instant": false,
           "interval": "",
           "legendFormat": "{{container_name}}",
@@ -1877,7 +1877,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "docker_container_mem_usage{container_name=~\"cloud-node-influxdb-1|mqtt-node-mqtt_broker-1|cloud-node-subscriber-1\"} / 1024 / 1024",
+          "expr": "(\r\n  docker_container_mem_usage{com_docker_compose_project=\"cloud-node\"}/1024/1024\r\n)\r\nor\r\n(\r\n  docker_container_mem_usage{container_name=\"mqtt-node-mqtt_broker-1\"}/1024/1024\r\n)\r\n",
           "instant": false,
           "legendFormat": "{{container_name}}",
           "range": true,
@@ -1977,7 +1977,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(docker_container_net_rx_bytes{container_name=~\"cloud-node-influxdb-1|mqtt-node-mqtt_broker-1|cloud-node-subscriber-1\"}[1m])\t",
+          "expr": "rate(docker_container_net_rx_bytes{container_name=~\"cloud-node-influxdb-1|mqtt-node-mqtt_broker-1|cloud-node-subscriber-1\"}[1m])\t\r\n\r\n",
           "instant": false,
           "legendFormat": "{{container_name}}",
           "range": true,
@@ -2598,5 +2598,5 @@
   "timezone": "browser",
   "title": "System and Containers Monitoring",
   "uid": "mixed-dashboard",
-  "version": 1
+  "version": 2
 }
