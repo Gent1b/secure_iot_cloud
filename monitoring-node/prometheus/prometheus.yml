@@ -21,7 +21,7 @@ scrape_configs:
     static_configs:
       - targets: ['172.31.39.30:9273']    # broker monitor metrics
   # ========= DEVICE NODE =========
-  - job_name: 'mqtt_monitor'
+  - job_name: '[publishers]'
     static_configs:
       - targets: ['172.31.38.156:9273']    # Publishers metrics
 
