@@ -17,3 +17,30 @@ services:
     depends_on:
       - mqtt_broker
     restart: unless-stopped
+
+  telegraf:
+      image: telegraf:latest
+      container_name: telegraf
+      privileged: true
+      security_opt:
+        - apparmor=unconfined
+      user: root
+      
+      # === CRITICAL FIX: ADD THIS SECTION ===
+      group_add:
+        - 988  # This is the GID for the 'docker' group (docker:x:988:...)
+      # ======================================
+      
+      volumes:
+        - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+        - /var/run/docker.sock:/var/run/docker.sock
+        - /proc:/host/proc:ro
+        - /sys:/host/sys:ro
+        - /etc:/host/etc:ro
+      environment:
+        - HOST_PROC=/host/proc
+        - HOST_SYS=/host/sys
+        - HOST_ETC=/host/etc
+      ports:
+        - "9273:9273"
+      restart: unless-stopped
