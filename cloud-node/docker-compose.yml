@@ -36,6 +36,7 @@ services:
   telegraf:
     image: telegraf:latest
     container_name: telegraf
+    privileged: true
     user: root
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
