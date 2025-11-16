@@ -3,7 +3,7 @@ services:
     image: ghcr.io/gent1b/iot-publisher:latest
     pull_policy: always
     env_file:
-      - .env
+      - /opt/iot-env/device.env
     environment:
       BROKER: "${BROKER}"
       MQTT_TOPIC: "${MQTT_TOPIC}"

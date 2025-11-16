@@ -6,7 +6,7 @@ services:
     volumes:
       - ./influxdb_data:/var/lib/influxdb2
     env_file:
-      - .env
+      - /opt/iot-env/cloud.env
     environment:
       DOCKER_INFLUXDB_INIT_MODE: "setup"
       DOCKER_INFLUXDB_INIT_USERNAME: "admin"
@@ -20,7 +20,7 @@ services:
     image: ghcr.io/gent1b/iot-subscriber:latest
     pull_policy: always
     env_file:
-      - .env
+      - /opt/iot-env/cloud.env
     environment:
       BROKER: "${BROKER}"
       INFLUXDB_URL: "${INFLUXDB_URL}"

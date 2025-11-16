@@ -11,7 +11,7 @@ services:
     image: ghcr.io/gent1b/iot-broker-monitor:latest
     pull_policy: always
     env_file:
-      - .env
+      - /opt/iot-env/mqtt.env
     ports:
       - "8001:8001"
     depends_on:

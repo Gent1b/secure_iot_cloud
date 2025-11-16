@@ -11,14 +11,14 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     env_file:
-      - .env
+      - /opt/iot-env/monitor.env
     environment:
       GF_SECURITY_ADMIN_USER: "${GF_SECURITY_ADMIN_USER}"
       GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD}"
     ports:
       - "3000:3000"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning   # your dashboards or datasources
+      - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
     restart: unless-stopped
