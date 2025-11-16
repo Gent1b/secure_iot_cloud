@@ -20,7 +20,10 @@ scrape_configs:
   - job_name: 'mqtt_monitor'
     static_configs:
       - targets: ['172.31.39.30:9273']    # broker monitor metrics
-
+  # ========= DEVICE NODE =========
+  - job_name: 'mqtt_monitor'
+    static_configs:
+      - targets: ['172.31.38.156:9273']    # Publishers metrics
 
   # ========= NODE EXPORTER (DISABLED) =========
   # You don’t have node exporter yet — uncomment later if installed.
