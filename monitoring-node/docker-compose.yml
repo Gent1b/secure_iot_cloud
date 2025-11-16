@@ -13,7 +13,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - /opt/iot-env/cloud.env
+      - /opt/iot-env/monitor.env
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
