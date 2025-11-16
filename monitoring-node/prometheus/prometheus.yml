@@ -17,9 +17,11 @@ scrape_configs:
     static_configs:
       - targets: ['172.31.39.30:8001']    # broker monitor metrics
 
-  - job_name: 'broker_monitor'
+  - job_name: 'mqtt_monitor'
     static_configs:
       - targets: ['172.31.39.30:1883']    # broker monitor metrics
+
+
   # ========= NODE EXPORTER (DISABLED) =========
   # You don’t have node exporter yet — uncomment later if installed.
   #
