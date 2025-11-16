@@ -93,7 +93,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "broker_data_messages_received_total{}",
+          "expr": "increase(broker_data_messages_received_total[$__range])\r\n",
           "instant": true,
           "intervalFactor": 1,
           "range": false,
@@ -2598,5 +2598,5 @@
   "timezone": "browser",
   "title": "System and Containers Monitoring",
   "uid": "mixed-dashboard",
-  "version": 2
+  "version": 3
 }
