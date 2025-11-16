@@ -36,8 +36,17 @@ services:
   telegraf:
     image: telegraf:latest
     container_name: telegraf
+    user: "telegraf:0"
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
     ports:
       - "9273:9273"
     depends_on:
