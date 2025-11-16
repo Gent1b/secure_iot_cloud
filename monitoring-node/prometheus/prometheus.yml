@@ -12,6 +12,11 @@ scrape_configs:
     static_configs:
       - targets: ['172.31.35.174:8000']   # subscriber metrics
 
+  - job_name: 'cloud_node_exporter'
+    static_configs:
+      - targets: ['172.31.35.174:9100']   # your cloud-node internal IP
+
+
   # ========= MQTT NODE =========
   - job_name: 'broker_monitor'
     static_configs:
