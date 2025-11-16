@@ -1,8 +1,9 @@
 services:
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus:/etc/prometheus
     ports:
       - "9090:9090"
     restart: unless-stopped
@@ -10,8 +11,6 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    ports:
-      - "3000:3000"
     env_file:
       - /opt/iot-env/monitor.env
     environment:
@@ -22,10 +21,11 @@ services:
       - INFLUXDB_ORG=${INFLUXDB_ORG}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
       - PROMETHEUS_URL=${PROMETHEUS_URL}
+    ports:
+      - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      - influxdb
-      - prometheus
+    restart: unless-stopped
 
+volumes:
+  grafana_data:
