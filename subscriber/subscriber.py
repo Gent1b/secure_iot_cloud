@@ -21,6 +21,9 @@ INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-token")
 INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "my-org")
 INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
 
+# default if publisher somehow doesn't send site_id
+DEFAULT_SITE_ID = "unknown-site"
+
 # Optional performance/config toggles (all ON by default)
 VALIDATE_BASIC = os.getenv("VALIDATE_BASIC", "1") == "1"
 DERIVE_FEATURES = os.getenv("DERIVE_FEATURES", "1") == "1"
@@ -70,6 +73,7 @@ def connect_influx(retries=10, delay=5):
             time.sleep(delay)
     raise RuntimeError("Could not connect to InfluxDB after retries")
 
+
 client, write_api = connect_influx()
 
 # ---------------------------------------------------------------------
@@ -78,14 +82,24 @@ client, write_api = connect_influx()
 def validate_data(data):
     if not isinstance(data, dict):
         raise ValueError("payload not a dict")
+
+    # required core fields
     for key in ("device_id", "temperature", "humidity"):
         if key not in data:
             raise ValueError(f"missing key {key}")
+
+    device_id = str(data["device_id"])
     t = float(data["temperature"])
     h = float(data["humidity"])
+
     if not (-50 <= t <= 100 and 0 <= h <= 100):
         raise ValueError("out-of-range value")
-    return data["device_id"], t, h
+
+    # optional metadata
+    site_id = str(data.get("site_id", DEFAULT_SITE_ID))
+
+    return device_id, t, h, site_id
+
 
 # ---------------------------------------------------------------------
 # Feature computation helper
@@ -111,6 +125,7 @@ def compute_features(device_id, t, h):
 
     return dew, t_avg, h_avg, alert
 
+
 # ---------------------------------------------------------------------
 # MQTT callbacks
 # ---------------------------------------------------------------------
@@ -121,18 +136,25 @@ def on_connect(client, userdata, flags, rc):
     else:
         logging.error(f"Failed to connect to MQTT broker, code {rc}")
 
+
 def on_message(client, userdata, msg):
     try:
         data = json.loads(msg.payload.decode())
         if VALIDATE_BASIC:
-            device_id, t, h = validate_data(data)
-            data["device_id"], data["temperature"], data["humidity"] = device_id, t, h
+            device_id, t, h, site_id = validate_data(data)
+            data.update(
+                device_id=device_id,
+                temperature=t,
+                humidity=h,
+                site_id=site_id,
+            )
         msg_queue.put_nowait(data)
         messages_received.inc()
     except queue.Full:
         logging.warning("Subscriber queue full, message dropped.")
     except Exception as e:
         logging.error(f"Error parsing MQTT message: {e}")
+
 
 # ---------------------------------------------------------------------
 # Writer thread
@@ -150,12 +172,18 @@ def influx_writer():
             t = float(data.get("temperature"))
             h = float(data.get("humidity"))
 
+            # site metadata with fallback
+            site_id = str(data.get("site_id", DEFAULT_SITE_ID))
+
             dew, t_avg, h_avg, alert = compute_features(device_id, t, h)
 
-            point = Point("sensor_data") \
-                .tag("device_id", device_id) \
-                .field("temperature", t) \
+            point = (
+                Point("sensor_data")
+                .tag("device_id", device_id)
+                .tag("site_id", site_id)
+                .field("temperature", t)
                 .field("humidity", h)
+            )
 
             if dew is not None:
                 point = point.field("dew_point", round(dew, 2))
@@ -169,8 +197,12 @@ def influx_writer():
             batch.append(point)
 
             if len(batch) >= INFLUX_BATCH_SIZE:
-                write_api.write(bucket=INFLUXDB_BUCKET, org=INFLUXDB_ORG,
-                                record=batch, write_precision=WritePrecision.S)
+                write_api.write(
+                    bucket=INFLUXDB_BUCKET,
+                    org=INFLUXDB_ORG,
+                    record=batch,
+                    write_precision=WritePrecision.S,
+                )
                 influx_writes_success.inc(len(batch))
                 batch.clear()
 
@@ -180,6 +212,7 @@ def influx_writer():
 
         finally:
             queue_depth.set(msg_queue.qsize())
+
 
 # ---------------------------------------------------------------------
 # Main entrypoint
@@ -193,8 +226,9 @@ def main():
     writer_thread = Thread(target=influx_writer, daemon=True)
     writer_thread.start()
 
-    logging.info("Subscriber service running with validation, features, and thresholds enabled.")
+    logging.info("Subscriber service running with validation, features, thresholds, and site tags enabled.")
     mqtt_client.loop_forever()
+
 
 if __name__ == "__main__":
     main()

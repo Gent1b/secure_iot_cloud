@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] [%(threadName)s] %(message)s",
-    force=True
+    force=True,
 )
 log = logging.getLogger("publisher")
 
@@ -21,18 +21,44 @@ TOPIC = os.getenv("MQTT_TOPIC", "iot/devices")
 DEVICES_PER_CONTAINER = int(os.getenv("DEVICES_PER_CONTAINER", 50))
 PUBLISH_INTERVAL = float(os.getenv("PUBLISH_INTERVAL", 10))
 
+# ---------- Grouping / topology (no envs) ----------
+SITES = ["plant-a", "plant-b", "plant-c"]  # logical CI sites
+
+
+def classify_device_site(device_id: str) -> str:
+    """
+    Derive a site_id deterministically from the device index.
+    Assumes device_id looks like '<base>_<index>'.
+    """
+    try:
+        idx_raw = int(device_id.rsplit("_", 1)[1])
+    except (ValueError, IndexError):
+        idx_raw = 1
+
+    idx = max(idx_raw - 1, 0)
+    site_id = SITES[idx % len(SITES)]
+    return site_id
+
+
 # ---------- Sensor data ----------
 def generate_sensor_data(device_id):
     temperature = round(random.uniform(20.0, 30.0), 2)
     humidity = round(random.uniform(40.0, 60.0), 2)
+
+    # occasional spikes
     if random.random() < 0.1:
         temperature += random.uniform(10.0, 20.0) * random.choice([-1, 1])
         humidity += random.uniform(10.0, 20.0) * random.choice([-1, 1])
+
+    site_id = classify_device_site(device_id)
+
     return {
         "device_id": device_id,
+        "site_id": site_id,
         "temperature": round(temperature, 2),
         "humidity": round(humidity, 2),
     }
+
 
 # ---------- MQTT helpers ----------
 def connect_with_retry(client, device_id):
@@ -44,15 +70,22 @@ def connect_with_retry(client, device_id):
             log.info("[%s] Connected to broker %s:%d", device_id, BROKER, PORT)
             return
         except Exception as e:
-            log.warning("[%s] Connection failed (%s); retrying in %ds", device_id, e, delay)
+            log.warning(
+                "[%s] Connection failed (%s); retrying in %ds",
+                device_id,
+                e,
+                delay,
+            )
             time.sleep(delay)
             delay = min(delay * 2, 30)  # exponential backoff
+
 
 def on_disconnect(client, userdata, rc):
     """Triggered when MQTT connection is lost."""
     if rc != 0:
         log.warning("[%s] Disconnected (rc=%s). Reconnecting…", userdata["device_id"], rc)
         connect_with_retry(client, userdata["device_id"])
+
 
 # ---------- Device simulation ----------
 def simulate_device(device_id):
@@ -84,10 +117,15 @@ def simulate_device(device_id):
             connect_with_retry(client, device_id)
         time.sleep(PUBLISH_INTERVAL)
 
+
 # ---------- Main ----------
 if __name__ == "__main__":
     base = os.getenv("HOSTNAME", "sim")
-    log.info("Starting simulator on %s, creating %d virtual devices", base, DEVICES_PER_CONTAINER)
+    log.info(
+        "Starting simulator on %s, creating %d virtual devices",
+        base,
+        DEVICES_PER_CONTAINER,
+    )
     threads = []
     for i in range(DEVICES_PER_CONTAINER):
         device_id = f"{base}_{i+1}"
