@@ -1,7 +1,9 @@
 services:
   publisher_device:
-    image: ghcr.io/gent1b/iot-publisher:latest
-    pull_policy: always
+    build:
+      context: ../publisher
+    image: iot-publisher:local
+    pull_policy: never
     env_file:
       - /opt/iot-env/device.env
     environment:

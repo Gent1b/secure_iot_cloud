@@ -17,8 +17,10 @@ services:
     restart: unless-stopped
 
   subscriber:
-    image: ghcr.io/gent1b/iot-subscriber:latest
-    pull_policy: always
+    build:
+      context: ../subscriber
+    image: iot-subscriber:local
+    pull_policy: never
     env_file:
       - /opt/iot-env/cloud.env
     environment:
