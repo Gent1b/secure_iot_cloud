@@ -45,8 +45,8 @@ if ($Scenario -eq "static") {
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.edge.yml up -d"
     
     # 4. Devices (K3s)
-    # Ensure script is executable and run it
-    ssh devices "cd $REPO_DIR/deployments/02_edge_static && chmod +x deploy.sh && ./deploy.sh"
+    # Ensure script is executable and run it (fix line endings first)
+    ssh devices "cd $REPO_DIR/deployments/02_edge_static && sed -i 's/\r$//' deploy.sh && chmod +x deploy.sh && ./deploy.sh"
 }
 
 # --- SCENARIO C: DYNAMIC EDGE ---
@@ -63,7 +63,8 @@ if ($Scenario -eq "dynamic") {
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.dynamic.yml up -d --build"
     
     # 4. Devices (K3s Dynamic)
-    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic && chmod +x deploy.sh && ./deploy.sh"
+    # We ensure both the current script and the referenced static script are executable and have correct line endings
+    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic && sed -i 's/\r$//' deploy.sh && sed -i 's/\r$//' ../02_edge_static/deploy.sh && chmod +x ../02_edge_static/deploy.sh && chmod +x deploy.sh && ./deploy.sh"
 }
 
 Write-Host "✅ Deployment command sent. Check Grafana/InfluxDB for data." -ForegroundColor Green

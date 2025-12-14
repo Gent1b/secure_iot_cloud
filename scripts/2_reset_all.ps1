@@ -13,14 +13,8 @@ foreach ($H in $HOSTS) {
     Write-Host ">>> Resetting $H..." -ForegroundColor Yellow
     
     # 1. Docker Compose Down (Wipe Volumes)
-    # We try to down ALL potential compose files to be safe
-    $CMD_DOCKER = "cd $REPO_DIR && \
-        (cd mqtt-node && docker compose down -v 2>/dev/null || true) && \
-        (cd monitoring-node && docker compose down -v 2>/dev/null || true) && \
-        (cd cloud-node && docker compose -f docker-compose.yml down -v 2>/dev/null || true) && \
-        (cd cloud-node && docker compose -f docker-compose.edge.yml down -v 2>/dev/null || true) && \
-        (cd cloud-node && docker compose -f docker-compose.dynamic.yml down -v 2>/dev/null || true) && \
-        (cd device-node && docker compose down -v 2>/dev/null || true)"
+    # We try to down ALL potential compose files to be safe. Using single line to avoid SSH CRLF issues.
+    $CMD_DOCKER = "cd $REPO_DIR && (cd mqtt-node && docker compose down -v 2>/dev/null || true) && (cd monitoring-node && docker compose down -v 2>/dev/null || true) && (cd cloud-node && docker compose -f docker-compose.yml down -v 2>/dev/null || true) && (cd cloud-node && docker compose -f docker-compose.edge.yml down -v 2>/dev/null || true) && (cd cloud-node && docker compose -f docker-compose.dynamic.yml down -v 2>/dev/null || true) && (cd device-node && docker compose down -v 2>/dev/null || true)"
 
     ssh $H $CMD_DOCKER
 
