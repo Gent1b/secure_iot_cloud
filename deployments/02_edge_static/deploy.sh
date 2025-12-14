@@ -53,17 +53,19 @@ echo "Importing images to K3s (using temp files to save memory)..."
 # Function to safely import
 safe_import() {
     IMG_NAME=$1
+    # Sanitize filename (replace : with _)
+    SAFE_NAME=$(echo "$IMG_NAME" | sed 's/:/_/g')
+    
     echo ">>> Processing $IMG_NAME..."
+    echo "  [1/3] Saving Docker image to disk..."
+    docker save "$IMG_NAME" -o "/tmp/${SAFE_NAME}.tar"
     
-    # Save to temp file instead of pipe to avoid memory buffer issues
-    docker save "$IMG_NAME" -o "/tmp/$IMG_NAME.tar"
+    echo "  [2/3] Importing into K3s containerd..."
+    sudo k3s ctr images import "/tmp/${SAFE_NAME}.tar"
     
-    # Import from file
-    sudo k3s ctr images import "/tmp/$IMG_NAME.tar"
-    
-    # Cleanup
-    rm "/tmp/$IMG_NAME.tar"
-    echo ">>> $IMG_NAME imported."
+    echo "  [3/3] Cleaning up temp file..."
+    rm "/tmp/${SAFE_NAME}.tar"
+    echo "✅ $IMG_NAME imported successfully."
 }
 
 safe_import "iot-subscriber:local"

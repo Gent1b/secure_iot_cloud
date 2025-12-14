@@ -21,7 +21,7 @@ LOCAL_TOPIC = os.getenv("LOCAL_TOPIC", "iot/devices")
 CENTRAL_BROKER = os.getenv("CENTRAL_BROKER", "54.93.230.47")
 CENTRAL_PORT = int(os.getenv("CENTRAL_PORT", 1883))
 CENTRAL_TOPIC_DATA = os.getenv("CENTRAL_TOPIC_DATA", "iot/data")
-CENTRAL_TOPIC_CONTROL = os.getenv("CENTRAL_TOPIC_CONTROL", "iot/control/#")
+CENTRAL_TOPIC_CONTROL = os.getenv("CENTRAL_TOPIC_CONTROL", "iot/control")
 
 SITE_ID = os.getenv("SITE_ID", "site_a")
 
