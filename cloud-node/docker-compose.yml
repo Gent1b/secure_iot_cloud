@@ -5,15 +5,13 @@ services:
       - "8086:8086"
     volumes:
       - ./influxdb_data:/var/lib/influxdb2
-    env_file:
-      - /opt/iot-env/cloud.env
     environment:
       DOCKER_INFLUXDB_INIT_MODE: "setup"
       DOCKER_INFLUXDB_INIT_USERNAME: "admin"
       DOCKER_INFLUXDB_INIT_PASSWORD: "admin123"
-      DOCKER_INFLUXDB_INIT_ORG: "${INFLUXDB_ORG}"
-      DOCKER_INFLUXDB_INIT_BUCKET: "${INFLUXDB_BUCKET}"
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUXDB_TOKEN}"
+      DOCKER_INFLUXDB_INIT_ORG: "${INFLUXDB_ORG:-my-org}"
+      DOCKER_INFLUXDB_INIT_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "${INFLUXDB_TOKEN:-my-token}"
     restart: unless-stopped
 
   subscriber:
@@ -21,14 +19,12 @@ services:
       context: ../subscriber
     image: iot-subscriber:local
     pull_policy: never
-    env_file:
-      - /opt/iot-env/cloud.env
     environment:
-      BROKER: "${BROKER}"
-      INFLUXDB_URL: "${INFLUXDB_URL}"
-      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
-      INFLUXDB_ORG: "${INFLUXDB_ORG}"
-      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
+      BROKER: "${BROKER:-54.93.230.47}"
+      INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-my-token}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG:-my-org}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
       MODE: "CLOUD"
       MQTT_TOPIC: "iot/devices"
     ports:
