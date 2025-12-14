@@ -12,7 +12,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 
 foreach ($H in $HOSTS) {
     Write-Host ">>> Updating $H..." -ForegroundColor Yellow
-    ssh $H "cd $REPO_DIR && git fetch origin && git checkout $BRANCH && git pull origin $BRANCH"
+    # We use git reset --hard to discard any local changes (like sed fixes) that might conflict with the pull
+    ssh $H "cd $REPO_DIR && git fetch origin && git reset --hard HEAD && git checkout $BRANCH && git pull origin $BRANCH"
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✅ $H updated." -ForegroundColor Green

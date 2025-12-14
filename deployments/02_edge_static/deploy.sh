@@ -48,9 +48,26 @@ docker build -t iot-subscriber:local "$SCRIPT_DIR/../../subscriber"
 docker build -t iot-publisher:local "$SCRIPT_DIR/../../publisher"
 
 # Export to K3s (k3s uses containerd, not docker daemon by default)
-echo "Importing images to K3s..."
-docker save iot-subscriber:local | sudo k3s ctr images import -
-docker save iot-publisher:local | sudo k3s ctr images import -
+echo "Importing images to K3s (using temp files to save memory)..."
+
+# Function to safely import
+safe_import() {
+    IMG_NAME=$1
+    echo ">>> Processing $IMG_NAME..."
+    
+    # Save to temp file instead of pipe to avoid memory buffer issues
+    docker save "$IMG_NAME" -o "/tmp/$IMG_NAME.tar"
+    
+    # Import from file
+    sudo k3s ctr images import "/tmp/$IMG_NAME.tar"
+    
+    # Cleanup
+    rm "/tmp/$IMG_NAME.tar"
+    echo ">>> $IMG_NAME imported."
+}
+
+safe_import "iot-subscriber:local"
+safe_import "iot-publisher:local"
 
 # 3. Apply Manifests
 echo "Applying Kubernetes Manifests..."
