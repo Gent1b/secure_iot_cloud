@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: iot-edge
+
+---
+# 1. Local MQTT Broker (Mosquitto)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-broker
+  namespace: iot-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-broker
+  template:
+    metadata:
+      labels:
+        app: local-broker
+    spec:
+      containers:
+      - name: mosquitto
+        image: eclipse-mosquitto:latest
+        ports:
+        - containerPort: 1883
+        volumeMounts:
+        - name: mosquitto-config
+          mountPath: /mosquitto/config/mosquitto.conf
+          subPath: mosquitto.conf
+      volumes:
+      - name: mosquitto-config
+        configMap:
+          name: mosquitto-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-broker
+  namespace: iot-edge
+spec:
+  selector:
+    app: local-broker
+  ports:
+    - protocol: TCP
+      port: 1883
+      targetPort: 1883
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: iot-edge
+data:
+  mosquitto.conf: |
+    listener 1883
+    allow_anonymous true
+    persistence false
+
+---
+# 2. Edge Agent (The Smart Subscriber)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-agent-site-a
+  namespace: iot-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-agent
+      site: plant-a
+  template:
+    metadata:
+      labels:
+        app: edge-agent
+        site: plant-a
+    spec:
+      containers:
+      - name: agent
+        image: iot-subscriber:local # Needs to be built/tagged on the node
+        imagePullPolicy: Never
+        env:
+        - name: SITE_ID
+          value: "plant-a"
+        - name: LOCAL_BROKER
+          value: "local-broker"
+        - name: CENTRAL_BROKER
+          value: "54.93.230.47" # Replace with your MQTT VM IP
+        - name: AGGREGATION_WINDOW
+          value: "60"
+        command: ["python", "edge_agent.py"]

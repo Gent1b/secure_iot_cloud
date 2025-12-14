@@ -1,0 +1,177 @@
+import os
+import time
+import json
+import logging
+import paho.mqtt.client as mqtt
+from influxdb_client import InfluxDBClient
+
+# ---------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------
+BROKER = os.getenv("BROKER", "mqtt_broker")
+PORT = 1883
+TOPIC_CONTROL = "iot/control"
+
+INFLUX_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
+INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-token")
+INFLUX_ORG = os.getenv("INFLUXDB_ORG", "my-org")
+INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
+
+# Sites to manage
+SITES = ["plant-a", "plant-b", "plant-c"]
+
+# ---------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [CONTROLLER] %(message)s")
+log = logging.getLogger("controller")
+
+# ---------------------------------------------------------------------
+# InfluxDB Client
+# ---------------------------------------------------------------------
+influx_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+query_api = influx_client.query_api()
+
+# ---------------------------------------------------------------------
+# MQTT Client
+# ---------------------------------------------------------------------
+mqtt_client = mqtt.Client(client_id="cloud_controller")
+
+def connect_mqtt():
+    while True:
+        try:
+            mqtt_client.connect(BROKER, PORT, 60)
+            mqtt_client.loop_start()
+            log.info("Connected to MQTT Broker.")
+            return
+        except Exception as e:
+            log.error(f"MQTT Connection failed: {e}. Retrying...")
+            time.sleep(5)
+
+# ---------------------------------------------------------------------
+# Logic: Fairness Algorithm
+# ---------------------------------------------------------------------
+def check_system_state():
+    """
+    Queries InfluxDB to determine the state of each site and the cloud.
+    """
+    site_states = {site: "NORMAL" for site in SITES}
+    
+    # 1. Check for Leaks (Last 1 minute)
+    # We look for any record where leak_flag == 1
+    query = f'''
+    from(bucket: "{INFLUX_BUCKET}")
+      |> range(start: -1m)
+      |> filter(fn: (r) => r["_measurement"] == "water_pipeline")
+      |> filter(fn: (r) => r["_field"] == "leak_flag")
+      |> filter(fn: (r) => r["_value"] == 1)
+      |> keep(columns: ["site_id"])
+      |> distinct(column: "site_id")
+    '''
+    
+    try:
+        tables = query_api.query(query)
+        for table in tables:
+            for record in table.records:
+                site = record["site_id"]
+                if site in site_states:
+                    site_states[site] = "LEAK_DETECTED"
+                    log.warning(f"Leak detected at {site}!")
+    except Exception as e:
+        log.error(f"InfluxDB Query Error: {e}")
+
+    # 2. Check Cloud Load (Real CPU Usage from Prometheus/Node Exporter)
+    # We query Prometheus for the 1-minute load average or CPU usage
+    # Query: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
+    # For this implementation, we'll use a simpler check or a mock if Prometheus isn't reachable from here.
+    # Ideally, the controller should query Prometheus.
+    
+    cloud_cpu_usage = 0.0
+    try:
+        # Option A: Query Prometheus (Requires requests lib and Prometheus URL)
+        # import requests
+        # response = requests.get("http://monitoring-node:9090/api/v1/query", params={'query': '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'})
+        # cloud_cpu_usage = float(response.json()['data']['result'][0]['value'][1])
+        
+        # Option B: Mock for Thesis Demonstration (Random fluctuation or file-based trigger)
+        # This allows you to manually "stress" the cloud by writing to a file.
+        if os.path.exists("/tmp/cloud_stress_test"):
+            cloud_cpu_usage = 90.0
+        else:
+            cloud_cpu_usage = 15.0 # Normal idle state
+            
+    except Exception:
+        cloud_cpu_usage = 15.0
+
+    return site_states, cloud_cpu_usage
+
+def enforce_fairness(site_states, cloud_cpu):
+    """
+    Decides the mode for each site based on states and cloud capacity.
+    """
+    commands = {}
+    
+    leaking_sites = [s for s, state in site_states.items() if state == "LEAK_DETECTED"]
+    
+    # SCENARIO 1: CRITICAL EVENT (Leak)
+    if leaking_sites:
+        log.info(f"SCENARIO: CRITICAL LEAK DETECTED. Prioritizing {leaking_sites}")
+        for site in SITES:
+            if site in leaking_sites:
+                commands[site] = "DEBUG"   # 50Hz Raw Data
+            else:
+                commands[site] = "ECONOMY" # Throttle to save bandwidth for the leak
+                
+    # SCENARIO 2: CLOUD CONGESTION (High CPU)
+    elif cloud_cpu > 80.0:
+        log.info(f"SCENARIO: CLOUD CONGESTION (CPU {cloud_cpu}%). Throttling all sites.")
+        for site in SITES:
+            commands[site] = "ECONOMY"
+            
+    # SCENARIO 3: CLOUD IDLE (Resource Maximization)
+    elif cloud_cpu < 20.0:
+        log.info(f"SCENARIO: CLOUD IDLE (CPU {cloud_cpu}%). Requesting High-Fidelity Data.")
+        for site in SITES:
+            commands[site] = "DEBUG" # Send everything! We have space.
+            
+    # SCENARIO 4: NORMAL OPERATION
+    else:
+        log.info(f"SCENARIO: NORMAL OPERATION (CPU {cloud_cpu}%).")
+        for site in SITES:
+            commands[site] = "NORMAL"
+            
+    return commands
+
+def send_commands(commands):
+    for site, mode in commands.items():
+        topic = f"{TOPIC_CONTROL}/{site}"
+        payload = json.dumps({"mode": mode, "timestamp": time.time()})
+        mqtt_client.publish(topic, payload, qos=1)
+        # log.info(f"Sent command to {site}: {mode}") # Reduce log noise
+
+# ---------------------------------------------------------------------
+# Main Loop
+# ---------------------------------------------------------------------
+def main():
+    connect_mqtt()
+    
+    log.info("Starting Feedback Control Loop...")
+    
+    while True:
+        try:
+            # 1. Sense
+            states, cpu_load = check_system_state()
+            
+            # 2. Plan
+            decisions = enforce_fairness(states, cpu_load)
+            
+            # 3. Act
+            send_commands(decisions)
+            
+        except Exception as e:
+            log.error(f"Control Loop Error: {e}")
+            
+        time.sleep(10) # Run every 10 seconds
+
+if __name__ == "__main__":
+    main()

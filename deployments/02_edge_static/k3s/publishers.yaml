@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: water-sensors-site-a
+  namespace: iot-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: water-sensors
+      site: plant-a
+  template:
+    metadata:
+      labels:
+        app: water-sensors
+        site: plant-a
+    spec:
+      containers:
+      - name: publisher
+        image: iot-publisher:local
+        imagePullPolicy: Never
+        env:
+        - name: BROKER
+          value: "local-broker" # Points to the K8s Service
+        - name: DEVICES_PER_CONTAINER
+          value: "10"
+        - name: HOSTNAME
+          value: "plant-a_sensor"

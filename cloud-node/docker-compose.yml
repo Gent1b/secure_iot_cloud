@@ -35,6 +35,25 @@ services:
     depends_on:
       - influxdb
     restart: unless-stopped
+
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.controller
+    image: iot-controller:local
+    pull_policy: never
+    env_file:
+      - /opt/iot-env/cloud.env
+    environment:
+      BROKER: "${BROKER}"
+      INFLUXDB_URL: "${INFLUXDB_URL}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
+    depends_on:
+      - influxdb
+      - subscriber
+    restart: unless-stopped
     
   node-exporter:
     image: prom/node-exporter:latest
