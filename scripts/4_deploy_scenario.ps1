@@ -27,8 +27,8 @@ if ($Scenario -eq "baseline") {
     # 3. Cloud (Standard)
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.yml up -d"
     
-    # 4. Devices (Docker)
-    ssh devices "cd $REPO_DIR/device-node && docker compose up -d"
+    # 4. Devices (Docker) - Set environment variables for baseline
+    ssh devices "cd $REPO_DIR/device-node && BROKER=54.93.230.47 MQTT_TOPIC=iot/devices DEVICES_PER_CONTAINER=10 PUBLISH_INTERVAL=0.02 docker compose up -d"
 }
 
 # --- SCENARIO B: STATIC EDGE ---
