@@ -9,7 +9,7 @@ from threading import Thread
 import paho.mqtt.client as mqtt
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import WritePrecision, SYNCHRONOUS
-from prometheus_client import start_http_server, Counter, Gauge
+from prometheus_client import start_http_server, Counter, Gauge, Histogram
 
 # ---------------------------------------------------------------------
 # Environment configuration
@@ -46,12 +46,26 @@ msg_queue = queue.Queue(maxsize=SUBSCRIBER_QUEUE_MAX)
 _win_pressure = defaultdict(lambda: deque(maxlen=ROLLING_WINDOW_SIZE))
 _win_flow = defaultdict(lambda: deque(maxlen=ROLLING_WINDOW_SIZE))
 
-# Prometheus Metrics
-messages_received = Counter("mqtt_messages_received_total", "Total MQTT messages received")
-processed_messages_sent = Counter("mqtt_processed_sent_total", "Total processed messages republished (Edge mode)")
-influx_writes_success = Counter("influxdb_writes_success_total", "Successful InfluxDB writes")
-influx_writes_failed = Counter("influxdb_writes_failed_total", "Failed InfluxDB writes")
+# ---------------------------------------------------------------------
+# Prometheus Metrics (The Observability Pipeline)
+# ---------------------------------------------------------------------
+
+# 1. Pipeline Stages
+m_arrived = Counter("mqtt_messages_arrived_total", "Total MQTT messages arrived at network callback (Absolute Truth)")
+m_buffered = Counter("mqtt_messages_buffered_total", "Total MQTT messages successfully enqueued")
+m_dropped = Counter("mqtt_messages_dropped_total", "Total MQTT messages dropped due to full queue (System Stress)")
+m_processed = Counter("app_messages_processed_total", "Total messages processed by worker thread logic")
+
+# 2. Thesis Evaluation Metrics (Academic)
+bandwidth_usage = Counter("iot_bandwidth_bytes_total", "Total telemetry payload bytes received (Cost)")
+reaction_latency = Histogram("iot_reaction_latency_seconds", "Time from Event Timestamp to Detection (Safety)")
+
+# 3. Egress & Business Metrics
+m_republished = Counter("mqtt_processed_sent_total", "Total processed messages republished (Edge mode)")
+influx_writes_success = Counter("influxdb_writes_success_total", "Successful InfluxDB points written")
+influx_writes_failed = Counter("influxdb_writes_failed_total", "Failed InfluxDB points written")
 leaks_detected = Counter("pipeline_leaks_detected_total", "Number of potential leaks detected")
+
 queue_depth = Gauge("subscriber_queue_depth", "Current subscriber queue depth")
 
 start_http_server(8000)
@@ -88,6 +102,17 @@ def process_water_sim_data(data):
        dict of features to store/forward
        bool is_alert (Critical event?)
     """
+    # Thesis Metric: Reaction Latency calculation
+    # Time from "Simulated Event" (data.timestamp) to "Now" (Processing)
+    try:
+        if "timestamp" in data:
+            event_time = float(data["timestamp"])
+            latency = time.time() - event_time
+            if latency > 0:
+                reaction_latency.observe(latency)
+    except Exception:
+        pass
+
     device_id = data.get("device_id")
     pressure = float(data.get("pressure_psi", 0))
     flow = float(data.get("flow_gpm", 0))
@@ -111,6 +136,7 @@ def process_water_sim_data(data):
     expected_flow = pressure * valve * 0.05
     # If observed flow is significantly higher than physics suggests
     if valve > 10 and flow > (expected_flow + 15.0):
+        # Additional check: Make sure we actually have pressure (avoid startup noise)
         is_leak = True
         leaks_detected.inc()
         is_alert = True
@@ -141,8 +167,12 @@ def worker():
         except queue.Empty:
             continue
             
+        # Pipeline: Picked up for processing
+        m_processed.inc()
+        
         try:
-            data = json.loads(raw_msg.payload.decode())
+            payload_str = raw_msg.payload.decode()
+            data = json.loads(payload_str)
             device_id = data.get("device_id")
             site_id = data.get("site_id", "unknown")
             
@@ -173,7 +203,7 @@ def worker():
                         influx_writes_success.inc(len(batch))
                     except Exception as e:
                         log.error(f"Write failed: {e}")
-                        influx_writes_failed.inc()
+                        influx_writes_failed.inc(len(batch))
                     finally:
                         batch.clear()
 
@@ -188,7 +218,7 @@ def worker():
                 # but to a DIFFERENT topic to show processing happened.
                 payload = json.dumps(full_record)
                 mqtt_publisher.publish(TOPIC_PROCESSED, payload)
-                processed_messages_sent.inc()
+                m_republished.inc()
 
         except Exception as e:
             log.error(f"Error processing message: {e}")
@@ -203,11 +233,20 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPIC)
 
 def on_message(client, userdata, msg):
+    # Pipeline: Network Ingress
+    m_arrived.inc()
+    
+    # Thesis Metric: Bandwidth Cost
+    # We count raw payload bytes
+    bandwidth_usage.inc(len(msg.payload))
+
     try:
         msg_queue.put_nowait(msg)
-        messages_received.inc()
+        # Pipeline: Buffered
+        m_buffered.inc()
     except queue.Full:
-        pass
+        # Pipeline: Drop
+        m_dropped.inc()
 
 # ---------------------------------------------------------------------
 # Main
