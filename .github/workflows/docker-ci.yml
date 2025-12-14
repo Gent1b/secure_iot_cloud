@@ -39,11 +39,19 @@ jobs:
           push: true
           tags: ghcr.io/gent1b/iot-publisher:latest
 
+      - name: Build and push controller image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./cloud-node
+          file: ./cloud-node/Dockerfile.controller
+          push: true
+          tags: ghcr.io/gent1b/iot-controller:latest
+
       - name: Build and push broker-monitor
         uses: docker/build-push-action@v5
         with:
-          context: ./mosquitto_log
-          file: ./mosquitto_log/Dockerfile
+          context: ./broker-monitor
+          file: ./broker-monitor/Dockerfile
           push: true
           tags: ghcr.io/gent1b/iot-broker-monitor:latest
 

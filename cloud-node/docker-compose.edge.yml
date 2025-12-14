@@ -30,7 +30,7 @@ services:
       INFLUXDB_ORG: "${INFLUXDB_ORG}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
       MODE: "CLOUD"
-      MQTT_TOPIC: "iot/devices"
+      MQTT_TOPIC: "iot/data/#"
     ports:
       - "8000:8000"
     depends_on:

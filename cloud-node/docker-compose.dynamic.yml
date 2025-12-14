@@ -30,13 +30,32 @@ services:
       INFLUXDB_ORG: "${INFLUXDB_ORG}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
       MODE: "CLOUD"
-      MQTT_TOPIC: "iot/devices"
+      MQTT_TOPIC: "iot/data/#"
     ports:
       - "8000:8000"
     depends_on:
       - influxdb
     restart: unless-stopped
 
+  controller:
+    build:
+      context: .
+      dockerfile: Dockerfile.controller
+    image: iot-controller:local
+    pull_policy: never
+    env_file:
+      - /opt/iot-env/cloud.env
+    environment:
+      BROKER: "${BROKER}"
+      INFLUXDB_URL: "${INFLUXDB_URL}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
+    depends_on:
+      - influxdb
+      - subscriber
+    restart: unless-stopped
+    
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
@@ -59,8 +78,12 @@ services:
       security_opt:
         - apparmor=unconfined
       user: root
+      
+      # === CRITICAL FIX: ADD THIS SECTION ===
       group_add:
-        - 988
+        - 988  # This is the GID for the 'docker' group (docker:x:988:...)
+      # ======================================
+      
       volumes:
         - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
         - /var/run/docker.sock:/var/run/docker.sock
