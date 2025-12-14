@@ -93,7 +93,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "increase(broker_data_messages_received_total[$__range])\r\n",
+          "expr": "mqtt_messages_arrived_total",
           "instant": true,
           "intervalFactor": 1,
           "range": false,
@@ -101,7 +101,7 @@
           "step": 240
         }
       ],
-      "title": "MQTT Received Messages",
+      "title": "Messages Arrived (Network)",
       "type": "stat"
     },
     {
@@ -259,7 +259,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "mqtt_messages_received_total",
+          "expr": "app_messages_processed_total",
           "instant": true,
           "intervalFactor": 1,
           "range": false,
@@ -267,7 +267,7 @@
           "step": 240
         }
       ],
-      "title": "Subscriber Recieved Messages",
+      "title": "Messages Processed (Worker)",
       "type": "stat"
     },
     {
@@ -342,7 +342,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "subscriber_errors_total",
+          "expr": "influxdb_writes_failed_total",
           "instant": true,
           "intervalFactor": 1,
           "range": false,
@@ -350,7 +350,7 @@
           "step": 240
         }
       ],
-      "title": "Errors InfluxDB",
+      "title": "InfluxDB Write Errors",
       "type": "stat"
     },
     {
