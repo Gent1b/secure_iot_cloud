@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY controller.py /app/
 
-RUN pip install --no-cache-dir paho-mqtt influxdb-client
+RUN pip install --no-cache-dir paho-mqtt influxdb-client requests
 
 CMD ["python", "-u", "controller.py"]

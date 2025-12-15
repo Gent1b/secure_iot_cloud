@@ -2,6 +2,7 @@ import os
 import time
 import json
 import logging
+import requests
 import paho.mqtt.client as mqtt
 from influxdb_client import InfluxDBClient
 
@@ -16,6 +17,8 @@ INFLUX_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
 INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-token")
 INFLUX_ORG = os.getenv("INFLUXDB_ORG", "my-org")
 INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
+
+PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://172.31.42.61:9090")
 
 # Sites to manage
 SITES = ["plant-a", "plant-b", "plant-c"]
@@ -81,27 +84,32 @@ def check_system_state():
         log.error(f"InfluxDB Query Error: {e}")
 
     # 2. Check Cloud Load (Real CPU Usage from Prometheus/Node Exporter)
-    # We query Prometheus for the 1-minute load average or CPU usage
-    # Query: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)
-    # For this implementation, we'll use a simpler check or a mock if Prometheus isn't reachable from here.
-    # Ideally, the controller should query Prometheus.
+    # Query Prometheus for CPU usage on cloud node
+    # Query: 100 - (avg(rate(node_cpu_seconds_total{instance="172.31.33.61:9100",mode="idle"}[1m])) * 100)
     
-    cloud_cpu_usage = 0.0
+    cloud_cpu_usage = 15.0  # Default fallback
     try:
-        # Option A: Query Prometheus (Requires requests lib and Prometheus URL)
-        # import requests
-        # response = requests.get("http://monitoring-node:9090/api/v1/query", params={'query': '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'})
-        # cloud_cpu_usage = float(response.json()['data']['result'][0]['value'][1])
+        query = '100 - (avg(rate(node_cpu_seconds_total{instance="172.31.33.61:9100",mode="idle"}[1m])) * 100)'
+        response = requests.get(
+            f"{PROMETHEUS_URL}/api/v1/query",
+            params={'query': query},
+            timeout=5
+        )
         
-        # Option B: Mock for Thesis Demonstration (Random fluctuation or file-based trigger)
-        # This allows you to manually "stress" the cloud by writing to a file.
-        if os.path.exists("/tmp/cloud_stress_test"):
-            cloud_cpu_usage = 90.0
+        if response.status_code == 200:
+            data = response.json()
+            if data['status'] == 'success' and data['data']['result']:
+                cloud_cpu_usage = float(data['data']['result'][0]['value'][1])
+                log.debug(f"Cloud CPU from Prometheus: {cloud_cpu_usage:.2f}%")
+            else:
+                log.warning("Prometheus query returned no results, using default CPU")
         else:
-            cloud_cpu_usage = 15.0 # Normal idle state
+            log.warning(f"Prometheus returned status {response.status_code}, using default CPU")
             
-    except Exception:
-        cloud_cpu_usage = 15.0
+    except requests.exceptions.RequestException as e:
+        log.error(f"Failed to query Prometheus: {e}. Using default CPU value.")
+    except (KeyError, IndexError, ValueError) as e:
+        log.error(f"Failed to parse Prometheus response: {e}. Using default CPU value.")
 
     return site_states, cloud_cpu_usage
 
