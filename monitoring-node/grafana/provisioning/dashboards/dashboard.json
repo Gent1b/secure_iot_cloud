@@ -26,7 +26,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Temperature Trends of All Devices in intervals of 30s",
+      "description": "Water Pressure Trends for Selected Site",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -71,16 +71,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 30
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 100
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "pressurepsi"
         },
         "overrides": []
       },
@@ -111,11 +115,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"sensor_data\" and\r\n      r._field == \"temperature\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"water_pipeline\" and\r\n      r._field == \"pressure_psi\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
           "refId": "A"
         }
       ],
-      "title": "Temperature Trends of All Devices",
+      "title": "Water Pressure Trends (${site_id})",
       "type": "timeseries"
     },
     {
@@ -123,7 +127,7 @@
         "type": "influxdb",
         "uid": "influxdb"
       },
-      "description": "Humidity Trends of All Devices in intervals of 30s",
+      "description": "Water Flow Rate Trends for Selected Site",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -173,11 +177,11 @@
               },
               {
                 "color": "red",
-                "value": 80
+                "value": 100
               }
             ]
           },
-          "unit": "percent"
+          "unit": "gpm"
         },
         "overrides": []
       },
@@ -208,11 +212,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"sensor_data\" and\r\n      r._field == \"humidity\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"water_pipeline\" and\r\n      r._field == \"flow_gpm\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
           "refId": "A"
         }
       ],
-      "title": "Humidity Trends of All Devices",
+      "title": "Flow Rate Trends (${site_id})",
       "type": "timeseries"
     },
     {
@@ -226,18 +230,26 @@
             "mode": "continuous-GrYlRd"
           },
           "mappings": [],
-          "max": 35,
-          "min": 20,
+          "max": 150,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "green",
+                "value": 100
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "pressurepsi"
         },
         "overrides": []
       },
@@ -267,11 +279,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"temperature\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n  |> last()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"tank_level\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> last()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Temperature for Device ${device_id}",
+      "title": "Tank Level - ${device_id}",
       "type": "gauge"
     },
     {
@@ -323,16 +335,20 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
               },
               {
                 "color": "#EAB839",
                 "value": 80
+              },
+              {
+                "color": "green",
+                "value": 100
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "pressurepsi"
         },
         "overrides": []
       },
@@ -359,11 +375,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"temperature\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"pressure_psi\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n",
           "refId": "A"
         }
       ],
-      "title": "Temperature Trends for Device ${device_id}",
+      "title": "Pressure History - ${device_id}",
       "type": "timeseries"
     },
     {
@@ -378,8 +394,8 @@
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 35,
-          "min": 20,
+          "max": 150,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -389,7 +405,7 @@
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "pressurepsi"
         },
         "overrides": []
       },
@@ -421,11 +437,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"temperature\" and r.device_id == \"${device_id}\")\r\n  |> max()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"pressure_psi\" and r.device_id == \"${device_id}\")\r\n  |> max()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Highest Temperature for Device ${device_id}",
+      "title": "Peak Pressure - ${device_id}",
       "type": "stat"
     },
     {
@@ -440,8 +456,8 @@
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 35,
-          "min": 20,
+          "max": 150,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -451,7 +467,7 @@
               }
             ]
           },
-          "unit": "celsius"
+          "unit": "pressurepsi"
         },
         "overrides": []
       },
@@ -483,11 +499,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"temperature\" and r.device_id == \"${device_id}\")\r\n  |> min()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"pressure_psi\" and r.device_id == \"${device_id}\")\r\n  |> min()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Lowest Temperature for Device ${device_id}",
+      "title": "Minimum Pressure - ${device_id}",
       "type": "stat"
     },
     {
@@ -498,17 +514,25 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "continuous-BlueGreen"
           },
           "mappings": [],
-          "max": 65,
-          "min": 30,
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 50
               }
             ]
           },
@@ -541,11 +565,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"humidity\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n  |> last()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"pressure_psi\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> last()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Humidity for Device ${device_id}",
+      "title": "Current Pressure - ${device_id}",
       "type": "gauge"
     },
     {
@@ -606,7 +630,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "gpm"
         },
         "overrides": []
       },
@@ -633,11 +657,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"humidity\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"flow_gpm\" and r.device_id == \"${device_id}\")\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n",
           "refId": "A"
         }
       ],
-      "title": "Humidity Trends for Device ${device_id}",
+      "title": "Flow Rate History - ${device_id}",
       "type": "timeseries"
     },
     {
@@ -652,8 +676,8 @@
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 65,
-          "min": 40,
+          "max": 120,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -663,7 +687,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "gpm"
         },
         "overrides": []
       },
@@ -695,11 +719,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"humidity\" and r.device_id == \"${device_id}\")\r\n  |> max()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"flow_gpm\" and r.device_id == \"${device_id}\")\r\n  |> max()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Highest Humidity for Device ${device_id}",
+      "title": "Peak Flow Rate - ${device_id}",
       "type": "stat"
     },
     {
@@ -714,8 +738,8 @@
           },
           "fieldMinMax": false,
           "mappings": [],
-          "max": 65,
-          "min": 40,
+          "max": 120,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -725,7 +749,7 @@
               }
             ]
           },
-          "unit": "percent"
+          "unit": "gpm"
         },
         "overrides": []
       },
@@ -757,11 +781,11 @@
       "pluginVersion": "12.2.1",
       "targets": [
         {
-          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"sensor_data\" and r._field == \"humidity\" and r.device_id == \"${device_id}\")\r\n  |> min()\r\n",
+          "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\" and r._field == \"flow_gpm\" and r.device_id == \"${device_id}\")\r\n  |> min()\r\n",
           "refId": "A"
         }
       ],
-      "title": "Lowest Humidity for Device ${device_id}",
+      "title": "Minimum Flow Rate - ${device_id}",
       "type": "stat"
     }
   ],
@@ -772,17 +796,16 @@
     "list": [
       {
         "current": {
-          "text": "0c4ebd4b44c5",
-          "value": "0c4ebd4b44c5"
+          "text": "plant-a",
+          "value": "plant-a"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"device_id\"\r\n)\r\n",
+        "definition": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"site_id\",\r\n  predicate: (r) => r._measurement == \"water_pipeline\"\r\n)\r\n",
         "description": "",
-        "includeAll": false,
-        "label": "device_id",
-        "name": "device_id",
+        "label": "Site",
+        "name": "site_id",
         "options": [],
         "query": {
-          "query": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"device_id\"\r\n)\r\n"
+          "query": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"site_id\",\r\n  predicate: (r) => r._measurement == \"water_pipeline\"\r\n)\r\n"
         },
         "refresh": 1,
         "regex": "",
@@ -790,16 +813,17 @@
       },
       {
         "current": {
-          "text": "plant-a",
-          "value": "plant-a"
+          "text": "device_1",
+          "value": "device_1"
         },
-        "definition": "import \"influxdata/influxdb/schema\"\r\n\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"site_id\"\r\n)\r\n",
+        "definition": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"device_id\",\r\n  predicate: (r) => r._measurement == \"water_pipeline\" and r.site_id == \"${site_id}\"\r\n)\r\n",
         "description": "",
-        "label": "site_id",
-        "name": "site_id",
+        "includeAll": false,
+        "label": "Device",
+        "name": "device_id",
         "options": [],
         "query": {
-          "query": "import \"influxdata/influxdb/schema\"\r\n\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"site_id\"\r\n)\r\n"
+          "query": "import \"influxdata/influxdb/schema\"\r\nschema.tagValues(\r\n  bucket: \"iot_data\",\r\n  tag: \"device_id\",\r\n  predicate: (r) => r._measurement == \"water_pipeline\" and r.site_id == \"${site_id}\"\r\n)\r\n"
         },
         "refresh": 1,
         "regex": "",
@@ -808,12 +832,12 @@
     ]
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Final Dashboard Humidity Temp",
+  "title": "Water Infrastructure Monitoring",
   "uid": "ae92py63keb5se",
-  "version": 1
+  "version": 2
 }
