@@ -75,6 +75,7 @@ def detect_leak(record):
 def aggregate_data(device_id, records):
     """
     Compresses a list of records into a single average record.
+    Preserves categorical fields (valve_position, pump_status) from last record.
     """
     if not records:
         return None
@@ -84,15 +85,17 @@ def aggregate_data(device_id, records):
     avg_flow = sum(r["flow_gpm"] for r in records) / count
     avg_level = sum(r["tank_level_pct"] for r in records) / count
     
-    # Use the timestamp of the last record
-    last_ts = records[-1]["timestamp"]
+    # Use the last record for timestamp and categorical fields
+    last_record = records[-1]
     
     return {
         "device_id": device_id,
         "site_id": SITE_ID,
-        "timestamp": last_ts,
+        "timestamp": last_record["timestamp"],
         "pressure_psi": round(avg_pressure, 2),
         "flow_gpm": round(avg_flow, 2),
+        "valve_position": last_record.get("valve_position", 0),
+        "pump_status": last_record.get("pump_status", 0),
         "tank_level_pct": round(avg_level, 2),
         "aggregation_count": count,
         "mode": CURRENT_MODE
