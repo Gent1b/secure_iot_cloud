@@ -3,6 +3,8 @@
 # ============================
 .env
 *.env
+# But allow env-files directory (deployment configs)
+!env-files/*.env
 
 # ============================
 # InfluxDB runtime data
