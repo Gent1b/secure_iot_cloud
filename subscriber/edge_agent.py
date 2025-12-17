@@ -162,12 +162,25 @@ def on_central_message(client, userdata, msg):
 # ---------------------------------------------------------------------
 def aggregation_worker():
     while True:
-        time.sleep(AGGREGATION_WINDOW)
+        # Dynamic Sleep based on Mode
+        # NORMAL: 60s, ECONOMY: 300s (5 mins), DEBUG: 1s (or skip)
+        target_window = AGGREGATION_WINDOW
+        if CURRENT_MODE == "ECONOMY":
+            target_window = 300
+        elif CURRENT_MODE == "DEBUG":
+            target_window = 1
+
+        # Sleep in 1s chunks to allow rapid reaction if mode changes
+        for _ in range(target_window):
+            if CURRENT_MODE == "DEBUG":
+                break # Exit sleep immediately if we switch to DEBUG
+            time.sleep(1)
         
         if CURRENT_MODE == "DEBUG":
+            time.sleep(1)
             continue # No aggregation in debug mode
             
-        log.info("Running aggregation cycle...")
+        log.info(f"Running aggregation cycle (Window: {target_window}s)...")
         
         with buffer_lock:
             # Snapshot and clear buffer

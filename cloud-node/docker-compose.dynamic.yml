@@ -51,9 +51,23 @@ services:
       INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
       INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
+      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://172.31.42.61:9090}"
     depends_on:
       - influxdb
       - subscriber
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+    image: iot-frontend:local
+    pull_policy: never
+    env_file:
+      - /opt/iot-env/cloud.env
+    environment:
+      BROKER: "${BROKER:-172.31.39.30}"
+    ports:
+      - "8501:8501"
     restart: unless-stopped
     
   node-exporter:

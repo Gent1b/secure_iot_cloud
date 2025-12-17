@@ -186,8 +186,13 @@ def worker():
             if MODE == "CLOUD":
                 p = Point("water_pipeline") \
                     .tag("device_id", device_id) \
-                    .tag("site_id", site_id) \
-                    .field("pressure_psi", float(data["pressure_psi"])) \
+                    .tag("site_id", site_id)
+                
+                # Capture Edge Alerts if present
+                if "alert_type" in data:
+                    p.tag("alert_type", data["alert_type"])
+
+                p.field("pressure_psi", float(data["pressure_psi"])) \
                     .field("flow_gpm", float(data["flow_gpm"])) \
                     .field("valve_position", float(data["valve_position"])) \
                     .field("pump_status", int(data["pump_status"])) \

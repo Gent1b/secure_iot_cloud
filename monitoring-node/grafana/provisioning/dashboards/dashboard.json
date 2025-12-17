@@ -514,7 +514,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-BlueGreen"
+            "mode": "continuous-blues"
           },
           "mappings": [],
           "max": 100,

@@ -87,7 +87,7 @@ spec:
         - name: LOCAL_BROKER
           value: "local-broker"
         - name: CENTRAL_BROKER
-          value: "54.93.230.47" # Replace with your MQTT VM IP
+          value: "172.31.39.30" # MQTT VM Private IP
         - name: AGGREGATION_WINDOW
           value: "60"
         command: ["python", "edge_agent.py"]

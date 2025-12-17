@@ -85,11 +85,11 @@ def check_system_state():
 
     # 2. Check Cloud Load (Real CPU Usage from Prometheus/Node Exporter)
     # Query Prometheus for CPU usage on cloud node
-    # Query: 100 - (avg(rate(node_cpu_seconds_total{instance="172.31.33.61:9100",mode="idle"}[1m])) * 100)
+    # Query: 100 - (avg(rate(node_cpu_seconds_total{job="cloud_node_exporter",mode="idle"}[1m])) * 100)
     
     cloud_cpu_usage = 15.0  # Default fallback
     try:
-        query = '100 - (avg(rate(node_cpu_seconds_total{instance="172.31.33.61:9100",mode="idle"}[1m])) * 100)'
+        query = '100 - (avg(rate(node_cpu_seconds_total{job="cloud_node_exporter",mode="idle"}[1m])) * 100)'
         response = requests.get(
             f"{PROMETHEUS_URL}/api/v1/query",
             params={'query': query},
