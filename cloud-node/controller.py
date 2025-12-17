@@ -137,7 +137,7 @@ def enforce_fairness(site_states, cloud_cpu):
             commands[site] = "ECONOMY"
             
     # SCENARIO 3: CLOUD IDLE (Resource Maximization)
-    elif cloud_cpu < 20.0:
+    elif cloud_cpu < 0.0:
         log.info(f"SCENARIO: CLOUD IDLE (CPU {cloud_cpu}%). Requesting High-Fidelity Data.")
         for site in SITES:
             commands[site] = "DEBUG" # Send everything! We have space.

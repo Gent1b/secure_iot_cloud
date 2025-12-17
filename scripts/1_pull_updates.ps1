@@ -17,8 +17,8 @@ foreach ($H in $HOSTS) {
     # We force remove any files that might have been created by containers
     ssh $H "cd $REPO_DIR && sudo chown -R `$(whoami):`$(whoami) . 2>/dev/null || true"
     
-    # We use git reset --hard to discard any local changes (like sed fixes) that might conflict with the pull
-    ssh $H "cd $REPO_DIR && git fetch origin && git reset --hard HEAD && git checkout $BRANCH && git pull origin $BRANCH"
+    # Reset to remote branch (handles force-pushes and divergent branches)
+    ssh $H "cd $REPO_DIR && git fetch origin && git checkout $BRANCH && git reset --hard origin/$BRANCH"
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✅ $H updated." -ForegroundColor Green
