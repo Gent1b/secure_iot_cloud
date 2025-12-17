@@ -26,3 +26,24 @@ foreach ($H in $HOSTS) {
         Write-Host "❌ $H update failed." -ForegroundColor Red
     }
 }
+
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host " 2. DEPLOY ENVIRONMENT FILES"
+Write-Host "========================================" -ForegroundColor Cyan
+
+# Ensure /opt/iot-env directory exists on all VMs
+foreach ($H in $HOSTS) {
+    ssh $H "sudo mkdir -p /opt/iot-env && sudo chown ubuntu:ubuntu /opt/iot-env"
+}
+
+# Deploy environment files
+Write-Host ">>> Deploying cloud.env..." -ForegroundColor Yellow
+scp env-files/cloud.env cloud:/opt/iot-env/cloud.env
+
+Write-Host ">>> Deploying monitor.env..." -ForegroundColor Yellow
+scp env-files/monitor.env monitoring:/opt/iot-env/monitor.env
+
+Write-Host ">>> Deploying mqtt.env..." -ForegroundColor Yellow
+scp env-files/mqtt.env mqtt:/opt/iot-env/mqtt.env
+
+Write-Host "✅ All nodes updated and environment files deployed." -ForegroundColor Green

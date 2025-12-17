@@ -20,8 +20,8 @@ TOPIC_PROCESSED = os.getenv("MQTT_TOPIC_PROCESSED", "iot/data/processed")
 
 # InfluxDB (Cloud Mode)
 INFLUXDB_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
-INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-token")
-INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "my-org")
+INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "local_token_123")
+INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "secure_iot")
 INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
 
 # Operation Modes

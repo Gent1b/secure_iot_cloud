@@ -14,8 +14,8 @@ PORT = 1883
 TOPIC_CONTROL = "iot/control"
 
 INFLUX_URL = os.getenv("INFLUXDB_URL", "http://influxdb:8086")
-INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "my-token")
-INFLUX_ORG = os.getenv("INFLUXDB_ORG", "my-org")
+INFLUX_TOKEN = os.getenv("INFLUXDB_TOKEN", "local_token_123")
+INFLUX_ORG = os.getenv("INFLUXDB_ORG", "secure_iot")
 INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
 
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://172.31.42.61:9090")

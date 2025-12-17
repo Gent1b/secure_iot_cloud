@@ -7,16 +7,16 @@ services:
       - ./mosquitto_config:/mosquitto/config
     restart: unless-stopped
 
-  broker_monitor:
-    image: ghcr.io/gent1b/iot-broker-monitor:latest
-    pull_policy: always
-    env_file:
-      - /opt/iot-env/mqtt.env
-    ports:
-      - "8001:8001"
-    depends_on:
-      - mqtt_broker
-    restart: unless-stopped
+  # broker_monitor:
+  #   image: ghcr.io/gent1b/iot-broker-monitor:latest
+  #   pull_policy: always
+  #   env_file:
+  #     - /opt/iot-env/mqtt.env
+  #   ports:
+  #     - "8001:8001"
+  #   depends_on:
+  #     - mqtt_broker
+  #   restart: unless-stopped
 
   telegraf:
       image: telegraf:latest
