@@ -65,7 +65,7 @@ services:
     env_file:
       - /opt/iot-env/cloud.env
     environment:
-      BROKER: "${BROKER:-172.31.39.30}"
+      BROKER: "${BROKER:-54.93.230.47}"  # Use public IP for MQTT broker connectivity
     ports:
       - "8501:8501"
     restart: unless-stopped
