@@ -18,6 +18,12 @@ Write-Host "========================================" -ForegroundColor Green
 if ($Scenario -eq "baseline") {
     Write-Host ">>> Starting Baseline (Docker on all nodes)..."
     
+    # 0. Deploy environment files
+    Write-Host ">>> Deploying environment files..."
+    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
+    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
+    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
+    
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
     
@@ -34,6 +40,12 @@ if ($Scenario -eq "baseline") {
 # --- SCENARIO B: STATIC EDGE ---
 if ($Scenario -eq "static") {
     Write-Host ">>> Starting Static Edge (K3s on Devices)..."
+    
+    # 0. Deploy environment files
+    Write-Host ">>> Deploying environment files..."
+    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
+    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
+    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
@@ -52,6 +64,12 @@ if ($Scenario -eq "static") {
 # --- SCENARIO C: DYNAMIC EDGE ---
 if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Dynamic Edge (Feedback Loop)..."
+    
+    # 0. Deploy environment files
+    Write-Host ">>> Deploying environment files..."
+    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
+    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
+    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
