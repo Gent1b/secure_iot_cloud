@@ -2,7 +2,6 @@ import streamlit as st
 import paho.mqtt.client as mqtt
 import json
 import time
-import threading
 import os
 import pandas as pd
 import queue
@@ -17,7 +16,7 @@ PORT = 1883
 TOPIC_CONTROL = "iot/control/#"
 TOPIC_DATA = "iot/data/#"
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://172.31.42.61:9090")
-SUBSCRIBER_METRICS_URL = "http://subscriber:8000/metrics"  # Internal docker network
+SUBSCRIBER_METRICS_URL = "http://subscriber:8000/metrics"
 
 # ---------------------------------------------------------------------
 # State Management
@@ -31,7 +30,6 @@ if "mqtt_connected" not in st.session_state:
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 
-# Queue for thread-safe communication
 msg_queue = queue.Queue()
 
 # ---------------------------------------------------------------------
@@ -50,12 +48,16 @@ def on_message(client, userdata, msg):
         }
         msg_queue.put(entry)
     except Exception as e:
-        print(f"Error: {e}")mqtt.CallbackAPIVersion.VERSION1, client_id="frontend_dashboard")
+        print(f"MQTT Error: {e}")
+
+def start_mqtt():
+    if st.session_state.mqtt_client is None:
         try:
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="frontend_dashboard")
+            client.on_message = on_message
             client.connect(BROKER, PORT, 60)
             client.subscribe(TOPIC_CONTROL)
             client.subscribe(TOPIC_DATA)
-            client.on_message = on_message
             client.loop_start()
             st.session_state.mqtt_client = client
             st.session_state.mqtt_connected = True
@@ -90,19 +92,17 @@ def get_subscriber_metrics():
                     metrics['writes'] = float(line.split()[1])
                 elif line.startswith('pipeline_leaks_detected_total'):
                     metrics['leaks'] = float(line.split()[1])
+                elif line.startswith('iot_bandwidth_bytes_total'):
+                    metrics['bandwidth'] = float(line.split()[1])
             return metrics
     except:
         pass
     return {}
-            client.loop_start()
-            st.session_state.mqtt_client = client
-        except Exception as e:
-            st.error(f"Could not connect to MQTT Broker at {BROKER}: {e}")
 
 def publish_leak(site_id):
-    if st.session_state.mqtt_client:
+    if st.session_state.mqtt_client and st.session_state.mqtt_connected:
         payload = {
-            "device_id": "simulated-injector",
+            "device_id": "demo-injector",
             "site_id": site_id,
             "timestamp": time.time(),
             "pressure_psi": 10.0,
@@ -110,17 +110,18 @@ def publish_leak(site_id):
             "valve_position": 100,
             "pump_status": 1,
             "tank_level_pct": 40.0,
-            "leak_flag": 1, # Explicit leak
+            "leak_flag": 1,
             "mode": "DEMO"
         }
         topic = f"iot/data/{site_id}"
         st.session_state.mqtt_client.publish(topic, json.dumps(payload))
-        st.success(f"Injecting LEAK event to {topic}")
+        return True
+    return False
 
 def publish_normal(site_id):
-    if st.session_state.mqtt_client:
+    if st.session_state.mqtt_client and st.session_state.mqtt_connected:
         payload = {
-            "device_id": "simulated-injector",
+            "device_id": "demo-injector",
             "site_id": site_id,
             "timestamp": time.time(),
             "pressure_psi": 50.0,
@@ -133,130 +134,224 @@ def publish_normal(site_id):
         }
         topic = f"iot/data/{site_id}"
         st.session_state.mqtt_client.publish(topic, json.dumps(payload))
-        st.info(f"Injecting NORMAL event to {topic}")
+        return True
+    return False
 
-# Connection Status
+def get_last_mode(site):
+    """Find the most recent mode command for a site"""
+    for log in st.session_state.logs:
+        if f"iot/control/{site}" in log["topic"]:
+            return log["payload"].get("mode", "UNKNOWN")
+    return "WAITING..."
+
+# ---------------------------------------------------------------------
+# UI Layout
+# ---------------------------------------------------------------------
+st.set_page_config(page_title="IoT Thesis Controller", layout="wide", page_icon="🚰")
+
+st.title("🚰 Secure IoT System with Edge Computing")
+st.markdown("### Real-Time Feedback Loop Controller - Master's Thesis Demonstration")
+
+# Sidebar for Controls
+with st.sidebar:
+    st.header("🎮 Simulation Controls")
+    st.markdown("**Trigger events to demonstrate the feedback loop**")
+    
+    st.divider()
+    st.subheader("Plant A 🏭")
+    col1, col2 = st.columns(2)
+    if col1.button("🔥 LEAK", key="leak_a", use_container_width=True):
+        if publish_leak("plant-a"):
+            st.success("✅ Leak injected!")
+        else:
+            st.error("❌ Not connected")
+    
+    if col2.button("✅ Normal", key="normal_a", use_container_width=True):
+        if publish_normal("plant-a"):
+            st.success("✅ Normal sent!")
+
+    st.subheader("Plant B 🏭")
+    col3, col4 = st.columns(2)
+    if col3.button("🔥 LEAK", key="leak_b", use_container_width=True):
+        if publish_leak("plant-b"):
+            st.success("✅ Leak injected!")
+        else:
+            st.error("❌ Not connected")
+    
+    if col4.button("✅ Normal", key="normal_b", use_container_width=True):
+        if publish_normal("plant-b"):
+            st.success("✅ Normal sent!")
+
+    st.subheader("Plant C 🏭")
+    col5, col6 = st.columns(2)
+    if col5.button("🔥 LEAK", key="leak_c", use_container_width=True):
+        if publish_leak("plant-c"):
+            st.success("✅ Leak injected!")
+        else:
+            st.error("❌ Not connected")
+    
+    if col6.button("✅ Normal", key="normal_c", use_container_width=True):
+        if publish_normal("plant-c"):
+            st.success("✅ Normal sent!")
+
+    st.divider()
+    if st.button("🔄 Reconnect MQTT", use_container_width=True):
+        st.session_state.mqtt_client = None
+        st.session_state.mqtt_connected = False
+        st.rerun()
+    
+    st.divider()
+    st.markdown("**Legend:**")
+    st.markdown("- 🔥 **LEAK**: Inject anomaly (high flow, low pressure)")
+    st.markdown("- ✅ **Normal**: Send regular telemetry")
+
+# Main Dashboard
+start_mqtt()
+
+# Connection Status Banner
 if st.session_state.mqtt_connected:
-    st.success(f"✅ Connected to MQTT Broker ({BROKER})")
+    st.success(f"✅ Connected to MQTT Broker `{BROKER}` | Subscribed to `{TOPIC_CONTROL}` and `{TOPIC_DATA}`")
 else:
-    st.error(f"❌ Not connected to MQTT Broker ({BROKER})")
+    st.error(f"❌ Disconnected from MQTT Broker `{BROKER}` - Click 'Reconnect MQTT' in sidebar")
 
-# Process incoming messages
+# Process incoming messages from queue
 while not msg_queue.empty():
     st.session_state.logs.insert(0, msg_queue.get())
-    # Keep log size manageable
-    if len(st.session_state.logs) > 50:
+    if len(st.session_state.logs) > 100:
         st.session_state.logs.pop()
 
-# Cloud Metrics
-st.subheader("Cloud Infrastructure Status")
-col_cpu, col_msgs, col_writes, col_leaks = st.columns(4)
+# === CLOUD INFRASTRUCTURE STATUS ===
+st.subheader("☁️ Cloud Infrastructure Metrics")
+col_cpu, col_msgs, col_writes, col_leaks, col_bw = st.columns(5)
 
 cloud_cpu = get_cloud_cpu()
 subscriber_metrics = get_subscriber_metrics()
 
 with col_cpu:
     if cloud_cpu is not None:
-        st.metric("Cloud CPU Usage", f"{cloud_cpu:.1f}%", delta="-Good" if cloud_cpu < 50 else "High")
+        delta_label = "🟢 Normal" if cloud_cpu < 50 else "🔴 High"
+        st.metric("Cloud CPU", f"{cloud_cpu:.1f}%", delta=delta_label)
     else:
-        st.metric("Cloud CPU Usage", "N/A")
+        st.metric("Cloud CPU", "N/A")
 
 with col_msgs:
     if 'arrived' in subscriber_metrics:
-        st.metric("Messages Received", int(subscriber_metrics['arrived']))
+        st.metric("Messages Received", f"{int(subscriber_metrics['arrived']):,}")
     else:
-        st.metric("Messages Received", "N/A")
+        st.metric("Messages Received", "0")
 
 with col_writes:
     if 'writes' in subscriber_metrics:
-        st.metric("InfluxDB Writes", int(subscriber_metrics['writes']))
+        st.metric("InfluxDB Writes", f"{int(subscriber_metrics['writes']):,}")
     else:
-        st.metric("InfluxDB Writes", "N/A")
+        st.metric("InfluxDB Writes", "0")
 
 with col_leaks:
     if 'leaks' in subscriber_metrics:
-        st.metric("Leaks Detected", int(subscriber_metrics['leaks']), delta="⚠️" if subscriber_metrics['leaks'] > 0 else None)
+        leak_count = int(subscriber_metrics['leaks'])
+        st.metric("Leaks Detected", leak_count, delta="⚠️ Alert" if leak_count > 0 else "🟢 Safe")
     else:
-        st.metric("Leaks Detected", "N/A")
+        st.metric("Leaks Detected", "0")
 
-# Display System State (Inferred from logs)
+with col_bw:
+    if 'bandwidth' in subscriber_metrics:
+        bw_mb = subscriber_metrics['bandwidth'] / (1024 * 1024)
+        st.metric("Bandwidth Used", f"{bw_mb:.2f} MB")
+    else:
+        st.metric("Bandwidth Used", "0 MB")
+
+# === EDGE AGENT OPERATING MODES ===
 st.divider()
-st.subheader("Edge Agent Operating Modes
-with st.sidebar:
-    st.header("Simulation Controls")
-    st.markdown("Trigger events to test the feedback loop.")
-    
-    st.subheader("Plant A")
-    col1, col2 = st.columns(2)
-    if col1.button("🔥 LEAK (A)"):
-        publish_leak("plant-a")
-    if col2.button("✅ Normal (A)"):
-        publish_normal("plant-a")
+st.subheader("⚙️ Edge Agent Operating Modes (Feedback Loop Status)")
 
-    st.subheader("Plant B")
-    col3, col4 = st.columns(2)
-    if col3.button("🔥 LEAK (B)"):
-        publish_leak("plant-b")
-    if col4.button("✅ Normal (B)"):
-        publish_normal("plant-b")
+col_a, col_b, col_c = st.columns(3)
 
-   divider()
-st.subheader("Feedback Loop Activity Log")
-st.markdown(f"*Listening to `iot/control/#` and `iot/data/#`... (Last {len(st.session_state.logs)} events)*")
+with col_a:
+    mode_a = get_last_mode("plant-a")
+    if mode_a == "DEBUG":
+        st.success(f"**Plant A**: {mode_a} (High-frequency)")
+    elif mode_a == "ECONOMY":
+        st.warning(f"**Plant A**: {mode_a} (Throttled)")
+    elif mode_a == "NORMAL":
+        st.info(f"**Plant A**: {mode_a} (Standard)")
+    else:
+        st.metric("Plant A", mode_a)
 
-# Convert logs to DataFrame for display
+with col_b:
+    mode_b = get_last_mode("plant-b")
+    if mode_b == "DEBUG":
+        st.success(f"**Plant B**: {mode_b} (High-frequency)")
+    elif mode_b == "ECONOMY":
+        st.warning(f"**Plant B**: {mode_b} (Throttled)")
+    elif mode_b == "NORMAL":
+        st.info(f"**Plant B**: {mode_b} (Standard)")
+    else:
+        st.metric("Plant B", mode_b)
+
+with col_c:
+    mode_c = get_last_mode("plant-c")
+    if mode_c == "DEBUG":
+        st.success(f"**Plant C**: {mode_c} (High-frequency)")
+    elif mode_c == "ECONOMY":
+        st.warning(f"**Plant C**: {mode_c} (Throttled)")
+    elif mode_c == "NORMAL":
+        st.info(f"**Plant C**: {mode_c} (Standard)")
+    else:
+        st.metric("Plant C", mode_c)
+
+# === LIVE ACTIVITY LOG ===
+st.divider()
+st.subheader("📡 Live Feedback Loop Activity")
+st.markdown(f"*Real-time MQTT events • Showing last {min(len(st.session_state.logs), 20)} of {len(st.session_state.logs)} total events*")
+
 if st.session_state.logs:
-    # Only show last 20 for readability
+    # Show last 20 events
     recent_logs = st.session_state.logs[:20]
-    df = pd.DataFrame(recent_logs)
     
-    # Format payload as string for display
-    df['payload_str'] = df['payload'].apply(lambda x: json.dumps(x, indent=2))
-    df_display = df[['time', 'topic', 'payload_str']]
+    # Create a cleaner display
+    display_data = []
+    for log in recent_logs:
+        payload_summary = ""
+        if "mode" in log["payload"]:
+            payload_summary = f"Mode: {log['payload']['mode']}"
+        elif "leak_flag" in log["payload"]:
+            leak = "🔥 LEAK" if log["payload"]["leak_flag"] == 1 else "✅ Normal"
+            payload_summary = f"{leak} | P: {log['payload'].get('pressure_psi', 'N/A')} psi | F: {log['payload'].get('flow_gpm', 'N/A')} gpm"
+        else:
+            payload_summary = str(log["payload"])[:50] + "..."
+        
+        display_data.append({
+            "Time": log["time"],
+            "Topic": log["topic"],
+            "Message": payload_summary
+        })
     
-    st.dataframe(df_display, use_container_width=True, height=400)
+    df = pd.DataFrame(display_data)
+    st.dataframe(df, use_container_width=True, height=400, hide_index=True)
 else:
-    st.info("No messages received yet. Waiting for system activity...")
+    st.info("⏳ Waiting for system activity... Make sure the dynamic scenario is running.")
+
+# === SYSTEM ARCHITECTURE INFO ===
+with st.expander("ℹ️ System Architecture Overview"):
+    st.markdown("""
+    **3-Layer Hierarchical IoT Architecture:**
+    - **Edge Layer** (Devices VM): 10 water sensors per plant + Edge agents for local processing
+    - **Transport Layer** (MQTT VM): Central message broker (172.31.39.30)
+    - **Cloud Layer** (Cloud VM): Subscriber, InfluxDB, Controller (Feedback loop)
+    
+    **Feedback Loop Logic:**
+    1. Controller monitors cloud CPU + InfluxDB for leaks every 10 seconds
+    2. If leak detected → Affected plant switches to DEBUG mode (50Hz data)
+    3. If cloud CPU > 80% → Non-critical plants throttle to ECONOMY mode (5min aggregation)
+    4. Otherwise → All plants run in NORMAL mode (1Hz aggregation)
+    
+    **Operating Modes:**
+    - **NORMAL**: 60s aggregation window (98% bandwidth reduction)
+    - **DEBUG**: Raw 50Hz passthrough (leak investigation)
+    - **ECONOMY**: 300s aggregation (cloud congestion mitigation)
+    """)
 
 # Auto-refresh every 5 seconds
 if time.time() - st.session_state.last_refresh > 5:
     st.session_state.last_refresh = time.time()
-            st.session_state.logs.pop()
-
-# Display System State (Inferred from logs)
-st.subheader("System State (Real-time)")
-col_a, col_b, col_c = st.columns(3)
-
-# Helper to find last mode for a site
-def get_last_mode(site):
-    for log in st.session_state.logs:
-        if f"iot/control/{site}" in log["topic"]:
-            return log["payload"].get("mode", "UNKNOWN")
-    return "WAITING..."
-
-with col_a:
-    mode_a = get_last_mode("plant-a")
-    st.metric("Plant A Mode", mode_a, delta="Active" if mode_a=="DEBUG" else None)
-
-with col_b:
-    mode_b = get_last_mode("plant-b")
-    st.metric("Plant B Mode", mode_b, delta="Active" if mode_b=="DEBUG" else None)
-
-with col_c:
-    mode_c = get_last_mode("plant-c")
-    st.metric("Plant C Mode", mode_c, delta="Active" if mode_c=="DEBUG" else None)
-
-# Live Log Feed
-st.subheader("Feedback Loop Activity Log")
-st.markdown("*Listening to `iot/control/#` and `iot/data/#`...*")
-
-# Convert logs to DataFrame for display
-if st.session_state.logs:
-    df = pd.DataFrame(st.session_state.logs)
-    st.dataframe(df, use_container_width=True)
-else:
-    st.info("No messages received yet. Waiting for system activity...")
-
-# Auto-refresh hack (Streamlit doesn't auto-refresh by default)
-time.sleep(1)
-st.rerun()
+    st.rerun()
