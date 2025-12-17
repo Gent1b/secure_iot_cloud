@@ -1,75 +1,147 @@
+import os
+import time
+import json
+import queue
 import streamlit as st
 import paho.mqtt.client as mqtt
-import json
-import time
-import os
-import pandas as pd
-import queue
 import requests
 from datetime import datetime
 
-# ---------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------
-BROKER = os.getenv("BROKER", "172.31.39.30")
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+BROKER = "54.93.230.47"  # MQTT VM public IP (hardcoded for Docker connectivity)
 PORT = 1883
 TOPIC_CONTROL = "iot/control/#"
 TOPIC_DATA = "iot/data/#"
+
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://172.31.42.61:9090")
 SUBSCRIBER_METRICS_URL = "http://subscriber:8000/metrics"
 
-# ---------------------------------------------------------------------
-# State Management
-# ---------------------------------------------------------------------
+SITES = ["plant-a", "plant-b", "plant-c"]
+SITE_LABELS = {"plant-a": "Plant A", "plant-b": "Plant B", "plant-c": "Plant C"}
+
+# =============================================================================
+# SESSION STATE INITIALIZATION
+# =============================================================================
 if "logs" not in st.session_state:
     st.session_state.logs = []
 if "mqtt_client" not in st.session_state:
     st.session_state.mqtt_client = None
 if "mqtt_connected" not in st.session_state:
     st.session_state.mqtt_connected = False
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
+if "plant_modes" not in st.session_state:
+    st.session_state.plant_modes = {site: "WAITING" for site in SITES}
+if "leak_status" not in st.session_state:
+    st.session_state.leak_status = {site: 0 for site in SITES}
+if "last_update" not in st.session_state:
+    st.session_state.last_update = {}
 
 msg_queue = queue.Queue()
 
-# ---------------------------------------------------------------------
-# MQTT Logic
-# ---------------------------------------------------------------------
+# =============================================================================
+# MQTT CALLBACKS
+# =============================================================================
+def on_connect(client, userdata, flags, rc):
+    """Called when MQTT connection is established"""
+    if rc == 0:
+        st.session_state.mqtt_connected = True
+        client.subscribe(TOPIC_CONTROL)
+        client.subscribe(TOPIC_DATA)
+        msg_queue.put({
+            "time": datetime.now(),
+            "type": "system",
+            "msg": f"✅ Connected to {BROKER} | Subscribed to topics"
+        })
+    else:
+        st.session_state.mqtt_connected = False
+        msg_queue.put({
+            "time": datetime.now(),
+            "type": "error",
+            "msg": f"❌ Connection failed (RC={rc})"
+        })
+
 def on_message(client, userdata, msg):
+    """Called when MQTT message is received"""
     try:
-        payload = json.loads(msg.payload.decode())
         topic = msg.topic
-        timestamp = time.strftime("%H:%M:%S")
+        payload = json.loads(msg.payload.decode())
+        timestamp = datetime.now()
         
-        entry = {
-            "time": timestamp,
-            "topic": topic,
-            "payload": payload
-        }
-        msg_queue.put(entry)
+        # CONTROL MESSAGES: Mode changes from controller
+        if topic.startswith("iot/control/"):
+            site_id = topic.split("/")[-1]
+            mode = payload.get("mode", "UNKNOWN")
+            st.session_state.plant_modes[site_id] = mode
+            st.session_state.last_update[site_id] = timestamp
+            
+            mode_emoji = {"DEBUG": "🔴", "NORMAL": "🟢", "ECONOMY": "🟡"}.get(mode, "⚪")
+            msg_queue.put({
+                "time": timestamp,
+                "type": "control",
+                "msg": f"{mode_emoji} {SITE_LABELS.get(site_id, site_id)} → {mode} mode",
+                "site": site_id,
+                "mode": mode
+            })
+        
+        # DATA MESSAGES: Leak detection events
+        elif topic.startswith("iot/data/"):
+            site_id = topic.split("/")[-1]
+            leak_flag = payload.get("leak_flag", 0)
+            
+            # Leak started
+            if leak_flag == 1 and st.session_state.leak_status.get(site_id) != 1:
+                st.session_state.leak_status[site_id] = 1
+                msg_queue.put({
+                    "time": timestamp,
+                    "type": "alert",
+                    "msg": f"🚨 {SITE_LABELS.get(site_id, site_id)}: LEAK DETECTED!",
+                    "site": site_id
+                })
+            
+            # Leak resolved
+            elif leak_flag == 0 and st.session_state.leak_status.get(site_id) == 1:
+                st.session_state.leak_status[site_id] = 0
+                msg_queue.put({
+                    "time": timestamp,
+                    "type": "info",
+                    "msg": f"✅ {SITE_LABELS.get(site_id, site_id)}: Leak resolved",
+                    "site": site_id
+                })
+                
     except Exception as e:
-        print(f"MQTT Error: {e}")
+        msg_queue.put({
+            "time": datetime.now(),
+            "type": "error",
+            "msg": f"⚠️ Parse error: {str(e)[:50]}"
+        })
 
 def start_mqtt():
+    """Initialize and start MQTT client"""
     if st.session_state.mqtt_client is None:
         try:
-            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="frontend_dashboard")
+            client = mqtt.Client(client_id="thesis_dashboard")
+            client.on_connect = on_connect
             client.on_message = on_message
             client.connect(BROKER, PORT, 60)
-            client.subscribe(TOPIC_CONTROL)
-            client.subscribe(TOPIC_DATA)
             client.loop_start()
             st.session_state.mqtt_client = client
-            st.session_state.mqtt_connected = True
         except Exception as e:
-            st.error(f"Could not connect to MQTT Broker at {BROKER}: {e}")
             st.session_state.mqtt_connected = False
+            msg_queue.put({
+                "time": datetime.now(),
+                "type": "error",
+                "msg": f"❌ MQTT connection failed: {str(e)[:50]}"
+            })
 
+# =============================================================================
+# METRICS FUNCTIONS
+# =============================================================================
 def get_cloud_cpu():
     """Query Prometheus for Cloud Node CPU usage"""
     try:
         query = '100 - (avg(rate(node_cpu_seconds_total{job="cloud_node_exporter",mode="idle"}[1m])) * 100)'
-        response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={'query': query}, timeout=2)
+        response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={'query': query}, timeout=3)
         if response.status_code == 200:
             data = response.json()
             if data['data']['result']:
@@ -81,277 +153,350 @@ def get_cloud_cpu():
 def get_subscriber_metrics():
     """Get metrics from Subscriber service"""
     try:
-        response = requests.get(SUBSCRIBER_METRICS_URL, timeout=2)
+        response = requests.get(SUBSCRIBER_METRICS_URL, timeout=3)
         if response.status_code == 200:
             lines = response.text.split('\n')
             metrics = {}
             for line in lines:
                 if line.startswith('mqtt_messages_arrived_total'):
-                    metrics['arrived'] = float(line.split()[1])
+                    metrics['arrived'] = int(float(line.split()[1]))
                 elif line.startswith('influxdb_writes_success_total'):
-                    metrics['writes'] = float(line.split()[1])
+                    metrics['writes'] = int(float(line.split()[1]))
                 elif line.startswith('pipeline_leaks_detected_total'):
-                    metrics['leaks'] = float(line.split()[1])
+                    metrics['leaks'] = int(float(line.split()[1]))
                 elif line.startswith('iot_bandwidth_bytes_total'):
-                    metrics['bandwidth'] = float(line.split()[1])
+                    metrics['bandwidth'] = float(line.split()[1]) / (1024 * 1024)  # MB
             return metrics
     except:
         pass
     return {}
 
+def get_mode_color(mode):
+    """Get color for operating mode"""
+    colors = {
+        "DEBUG": "#dc3545",
+        "NORMAL": "#28a745",
+        "ECONOMY": "#ffc107",
+        "WAITING": "#6c757d",
+        "STALE": "#fd7e14"
+    }
+    return colors.get(mode, "#6c757d")
+
 def publish_leak(site_id):
+    """Inject a leak event for demonstration"""
     if st.session_state.mqtt_client and st.session_state.mqtt_connected:
-        payload = {
-            "device_id": "demo-injector",
-            "site_id": site_id,
-            "timestamp": time.time(),
-            "pressure_psi": 10.0,
-            "flow_gpm": 150.0,
-            "valve_position": 100,
-            "pump_status": 1,
-            "tank_level_pct": 40.0,
-            "leak_flag": 1,
-            "mode": "DEMO"
-        }
         topic = f"iot/data/{site_id}"
+        payload = {
+            "pressure_psi": 25.0,
+            "flow_gpm": 150.0,
+            "tank_level": 75.0,
+            "leak_flag": 1,
+            "timestamp": time.time()
+        }
         st.session_state.mqtt_client.publish(topic, json.dumps(payload))
-        return True
-    return False
+        st.success(f"🔥 Injected leak event for {SITE_LABELS[site_id]}")
 
 def publish_normal(site_id):
+    """Send normal telemetry for demonstration"""
     if st.session_state.mqtt_client and st.session_state.mqtt_connected:
-        payload = {
-            "device_id": "demo-injector",
-            "site_id": site_id,
-            "timestamp": time.time(),
-            "pressure_psi": 50.0,
-            "flow_gpm": 250.0,
-            "valve_position": 100,
-            "pump_status": 1,
-            "tank_level_pct": 60.0,
-            "leak_flag": 0,
-            "mode": "DEMO"
-        }
         topic = f"iot/data/{site_id}"
+        payload = {
+            "pressure_psi": 45.0,
+            "flow_gpm": 100.0,
+            "tank_level": 80.0,
+            "leak_flag": 0,
+            "timestamp": time.time()
+        }
         st.session_state.mqtt_client.publish(topic, json.dumps(payload))
-        return True
-    return False
+        st.success(f"✅ Sent normal telemetry for {SITE_LABELS[site_id]}")
 
-def get_last_mode(site):
-    """Find the most recent mode command for a site"""
-    for log in st.session_state.logs:
-        if f"iot/control/{site}" in log["topic"]:
-            return log["payload"].get("mode", "UNKNOWN")
-    return "WAITING..."
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+st.set_page_config(
+    page_title="IoT Feedback Loop - Thesis Demo",
+    page_icon="🔄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ---------------------------------------------------------------------
-# UI Layout
-# ---------------------------------------------------------------------
-st.set_page_config(page_title="IoT Thesis Controller", layout="wide", page_icon="🚰")
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+        color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .mode-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 2px solid #e0e0e0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .mode-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .mode-badge {
+        padding: 0.8rem 1.5rem;
+        border-radius: 25px;
+        font-weight: bold;
+        font-size: 1.4rem;
+        color: white;
+        margin: 1rem 0;
+        display: inline-block;
+    }
+    .log-entry {
+        padding: 0.7rem 1rem;
+        border-left: 4px solid #667eea;
+        margin: 0.5rem 0;
+        background: white;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        font-family: 'Courier New', monospace;
+    }
+    .metric-box {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        border-top: 4px solid #667eea;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🚰 Secure IoT System with Edge Computing")
-st.markdown("### Real-Time Feedback Loop Controller - Master's Thesis Demonstration")
+# =============================================================================
+# HEADER
+# =============================================================================
+st.markdown('''
+<div class="main-header">
+    <h1 style="margin: 0;">🔄 Secure IoT System with Edge Computing</h1>
+    <p style="font-size: 1.1rem; margin: 0.5rem 0 0 0; opacity: 0.95;">
+        Real-Time Feedback Loop Controller | Master's Thesis Demonstration
+    </p>
+</div>
+''', unsafe_allow_html=True)
 
-# Sidebar for Controls
+# =============================================================================
+# SIDEBAR
+# =============================================================================
 with st.sidebar:
-    st.header("🎮 Simulation Controls")
-    st.markdown("**Trigger events to demonstrate the feedback loop**")
+    st.markdown("## 🎮 Simulation Controls")
+    st.caption("Trigger events to demonstrate the feedback loop")
+    
+    for site_id in SITES:
+        with st.expander(f"📍 {SITE_LABELS[site_id]}", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔥 LEAK", key=f"leak_{site_id}", use_container_width=True):
+                    publish_leak(site_id)
+            with col2:
+                if st.button("✅ Normal", key=f"normal_{site_id}", use_container_width=True):
+                    publish_normal(site_id)
     
     st.divider()
-    st.subheader("Plant A 🏭")
-    col1, col2 = st.columns(2)
-    if col1.button("🔥 LEAK", key="leak_a", use_container_width=True):
-        if publish_leak("plant-a"):
-            st.success("✅ Leak injected!")
-        else:
-            st.error("❌ Not connected")
     
-    if col2.button("✅ Normal", key="normal_a", use_container_width=True):
-        if publish_normal("plant-a"):
-            st.success("✅ Normal sent!")
-
-    st.subheader("Plant B 🏭")
-    col3, col4 = st.columns(2)
-    if col3.button("🔥 LEAK", key="leak_b", use_container_width=True):
-        if publish_leak("plant-b"):
-            st.success("✅ Leak injected!")
-        else:
-            st.error("❌ Not connected")
-    
-    if col4.button("✅ Normal", key="normal_b", use_container_width=True):
-        if publish_normal("plant-b"):
-            st.success("✅ Normal sent!")
-
-    st.subheader("Plant C 🏭")
-    col5, col6 = st.columns(2)
-    if col5.button("🔥 LEAK", key="leak_c", use_container_width=True):
-        if publish_leak("plant-c"):
-            st.success("✅ Leak injected!")
-        else:
-            st.error("❌ Not connected")
-    
-    if col6.button("✅ Normal", key="normal_c", use_container_width=True):
-        if publish_normal("plant-c"):
-            st.success("✅ Normal sent!")
-
-    st.divider()
     if st.button("🔄 Reconnect MQTT", use_container_width=True):
+        if st.session_state.mqtt_client:
+            st.session_state.mqtt_client.loop_stop()
+            st.session_state.mqtt_client.disconnect()
         st.session_state.mqtt_client = None
         st.session_state.mqtt_connected = False
         st.rerun()
     
     st.divider()
-    st.markdown("**Legend:**")
-    st.markdown("- 🔥 **LEAK**: Inject anomaly (high flow, low pressure)")
-    st.markdown("- ✅ **Normal**: Send regular telemetry")
+    st.markdown("### 📖 Operating Modes")
+    st.markdown("""
+    - 🔴 **DEBUG**: 50Hz raw data  
+      ↳ Leak detection mode
+    - 🟢 **NORMAL**: 1Hz aggregated  
+      ↳ Standard operation
+    - 🟡 **ECONOMY**: 0.2Hz throttled  
+      ↳ Resource conservation
+    """)
+    
+    st.divider()
+    st.caption(f"**Broker:** {BROKER}:{PORT}")
+    st.caption(f"**Auto-refresh:** Every 1 second")
 
-# Main Dashboard
+# =============================================================================
+# MAIN DASHBOARD
+# =============================================================================
+
+# Start MQTT connection
 start_mqtt()
 
-# Connection Status Banner
-if st.session_state.mqtt_connected:
-    st.success(f"✅ Connected to MQTT Broker `{BROKER}` | Subscribed to `{TOPIC_CONTROL}` and `{TOPIC_DATA}`")
-else:
-    st.error(f"❌ Disconnected from MQTT Broker `{BROKER}` - Click 'Reconnect MQTT' in sidebar")
-
-# Process incoming messages from queue
+# Process message queue
 while not msg_queue.empty():
-    st.session_state.logs.insert(0, msg_queue.get())
+    log_entry = msg_queue.get()
+    st.session_state.logs.insert(0, log_entry)
     if len(st.session_state.logs) > 100:
         st.session_state.logs.pop()
 
-# === CLOUD INFRASTRUCTURE STATUS ===
+# Connection status
+if st.session_state.mqtt_connected:
+    st.success(f"✅ **CONNECTED** to MQTT Broker `{BROKER}` | Subscribed to `{TOPIC_CONTROL}` and `{TOPIC_DATA}`")
+else:
+    st.error(f"❌ **DISCONNECTED** from MQTT Broker - Click 'Reconnect MQTT' in sidebar")
+
+st.divider()
+
+# =============================================================================
+# CLOUD METRICS
+# =============================================================================
 st.subheader("☁️ Cloud Infrastructure Metrics")
-col_cpu, col_msgs, col_writes, col_leaks, col_bw = st.columns(5)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 cloud_cpu = get_cloud_cpu()
-subscriber_metrics = get_subscriber_metrics()
+metrics = get_subscriber_metrics()
 
-with col_cpu:
+with col1:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
     if cloud_cpu is not None:
-        delta_label = "🟢 Normal" if cloud_cpu < 50 else "🔴 High"
-        st.metric("Cloud CPU", f"{cloud_cpu:.1f}%", delta=delta_label)
+        delta = "🟢 Normal" if cloud_cpu < 50 else "🔴 High"
+        st.metric("Cloud CPU", f"{cloud_cpu:.1f}%", delta=delta)
     else:
         st.metric("Cloud CPU", "N/A")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_msgs:
-    if 'arrived' in subscriber_metrics:
-        st.metric("Messages Received", f"{int(subscriber_metrics['arrived']):,}")
-    else:
-        st.metric("Messages Received", "0")
+with col2:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+    st.metric("Messages", f"{metrics.get('arrived', 0):,}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_writes:
-    if 'writes' in subscriber_metrics:
-        st.metric("InfluxDB Writes", f"{int(subscriber_metrics['writes']):,}")
-    else:
-        st.metric("InfluxDB Writes", "0")
+with col3:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+    st.metric("DB Writes", f"{metrics.get('writes', 0):,}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_leaks:
-    if 'leaks' in subscriber_metrics:
-        leak_count = int(subscriber_metrics['leaks'])
-        st.metric("Leaks Detected", leak_count, delta="⚠️ Alert" if leak_count > 0 else "🟢 Safe")
-    else:
-        st.metric("Leaks Detected", "0")
+with col4:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+    leaks = metrics.get('leaks', 0)
+    st.metric("Leaks Detected", f"{leaks}", delta="⚠️ Alert" if leaks > 0 else "")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_bw:
-    if 'bandwidth' in subscriber_metrics:
-        bw_mb = subscriber_metrics['bandwidth'] / (1024 * 1024)
-        st.metric("Bandwidth Used", f"{bw_mb:.2f} MB")
-    else:
-        st.metric("Bandwidth Used", "0 MB")
+with col5:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+    st.metric("Bandwidth", f"{metrics.get('bandwidth', 0):.2f} MB")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# === EDGE AGENT OPERATING MODES ===
 st.divider()
+
+# =============================================================================
+# EDGE AGENT MODES
+# =============================================================================
 st.subheader("⚙️ Edge Agent Operating Modes (Feedback Loop Status)")
+st.caption("Controller monitors system state and dynamically adjusts edge agent transmission modes")
 
 col_a, col_b, col_c = st.columns(3)
 
-with col_a:
-    mode_a = get_last_mode("plant-a")
-    if mode_a == "DEBUG":
-        st.success(f"**Plant A**: {mode_a} (High-frequency)")
-    elif mode_a == "ECONOMY":
-        st.warning(f"**Plant A**: {mode_a} (Throttled)")
-    elif mode_a == "NORMAL":
-        st.info(f"**Plant A**: {mode_a} (Standard)")
-    else:
-        st.metric("Plant A", mode_a)
+for col, site_id in zip([col_a, col_b, col_c], SITES):
+    with col:
+        mode = st.session_state.plant_modes.get(site_id, "WAITING")
+        color = get_mode_color(mode)
+        
+        # Check if stale
+        if site_id in st.session_state.last_update:
+            time_ago = (datetime.now() - st.session_state.last_update[site_id]).seconds
+            if time_ago > 30:
+                mode = "STALE"
+                color = get_mode_color("STALE")
+        else:
+            time_ago = None
+        
+        mode_desc = {
+            "DEBUG": "📊 High-fidelity mode (50Hz raw)",
+            "NORMAL": "✅ Standard operation (1Hz avg)",
+            "ECONOMY": "💤 Throttled mode (0.2Hz)",
+            "WAITING": "⏳ No data received yet",
+            "STALE": "⚠️ Connection lost"
+        }
+        
+        st.markdown(f'<div class="mode-card">', unsafe_allow_html=True)
+        st.markdown(f"**{SITE_LABELS[site_id]}**")
+        st.markdown(f'<div class="mode-badge" style="background-color: {color};">{mode}</div>', unsafe_allow_html=True)
+        st.caption(mode_desc.get(mode, "Unknown"))
+        if time_ago is not None:
+            st.caption(f"🕐 Updated {time_ago}s ago")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-with col_b:
-    mode_b = get_last_mode("plant-b")
-    if mode_b == "DEBUG":
-        st.success(f"**Plant B**: {mode_b} (High-frequency)")
-    elif mode_b == "ECONOMY":
-        st.warning(f"**Plant B**: {mode_b} (Throttled)")
-    elif mode_b == "NORMAL":
-        st.info(f"**Plant B**: {mode_b} (Standard)")
-    else:
-        st.metric("Plant B", mode_b)
-
-with col_c:
-    mode_c = get_last_mode("plant-c")
-    if mode_c == "DEBUG":
-        st.success(f"**Plant C**: {mode_c} (High-frequency)")
-    elif mode_c == "ECONOMY":
-        st.warning(f"**Plant C**: {mode_c} (Throttled)")
-    elif mode_c == "NORMAL":
-        st.info(f"**Plant C**: {mode_c} (Standard)")
-    else:
-        st.metric("Plant C", mode_c)
-
-# === LIVE ACTIVITY LOG ===
 st.divider()
+
+# =============================================================================
+# ACTIVITY LOG
+# =============================================================================
 st.subheader("📡 Live Feedback Loop Activity")
-st.markdown(f"*Real-time MQTT events • Showing last {min(len(st.session_state.logs), 20)} of {len(st.session_state.logs)} total events*")
 
 if st.session_state.logs:
-    # Show last 20 events
-    recent_logs = st.session_state.logs[:20]
+    st.caption(f"**Real-time events** • {len(st.session_state.logs)} total logged")
     
-    # Create a cleaner display
-    display_data = []
-    for log in recent_logs:
-        payload_summary = ""
-        if "mode" in log["payload"]:
-            payload_summary = f"Mode: {log['payload']['mode']}"
-        elif "leak_flag" in log["payload"]:
-            leak = "🔥 LEAK" if log["payload"]["leak_flag"] == 1 else "✅ Normal"
-            payload_summary = f"{leak} | P: {log['payload'].get('pressure_psi', 'N/A')} psi | F: {log['payload'].get('flow_gpm', 'N/A')} gpm"
-        else:
-            payload_summary = str(log["payload"])[:50] + "..."
+    for log in st.session_state.logs[:15]:
+        log_type = log.get("type", "info")
+        timestamp = log.get("time", datetime.now()).strftime("%H:%M:%S")
+        message = log.get("msg", "Unknown")
         
-        display_data.append({
-            "Time": log["time"],
-            "Topic": log["topic"],
-            "Message": payload_summary
-        })
-    
-    df = pd.DataFrame(display_data)
-    st.dataframe(df, use_container_width=True, height=400, hide_index=True)
+        type_colors = {
+            "control": "#667eea",
+            "alert": "#dc3545",
+            "info": "#28a745",
+            "system": "#17a2b8",
+            "error": "#fd7e14"
+        }
+        color = type_colors.get(log_type, "#6c757d")
+        
+        st.markdown(
+            f'<div class="log-entry" style="border-left-color: {color};">'
+            f'<strong style="color: {color};">[{timestamp}]</strong> {message}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 else:
-    st.info("⏳ Waiting for system activity... Make sure the dynamic scenario is running.")
+    st.info("⏳ **Waiting for activity...** Make sure the dynamic scenario is deployed on the edge VM.")
 
-# === SYSTEM ARCHITECTURE INFO ===
-with st.expander("ℹ️ System Architecture Overview"):
+st.divider()
+
+# =============================================================================
+# SYSTEM ARCHITECTURE
+# =============================================================================
+with st.expander("📐 System Architecture Overview", expanded=False):
     st.markdown("""
-    **3-Layer Hierarchical IoT Architecture:**
-    - **Edge Layer** (Devices VM): 10 water sensors per plant + Edge agents for local processing
-    - **Transport Layer** (MQTT VM): Central message broker (172.31.39.30)
-    - **Cloud Layer** (Cloud VM): Subscriber, InfluxDB, Controller (Feedback loop)
+    ### Three-Layer Hierarchical Architecture
     
-    **Feedback Loop Logic:**
-    1. Controller monitors cloud CPU + InfluxDB for leaks every 10 seconds
-    2. If leak detected → Affected plant switches to DEBUG mode (50Hz data)
-    3. If cloud CPU > 80% → Non-critical plants throttle to ECONOMY mode (5min aggregation)
-    4. Otherwise → All plants run in NORMAL mode (1Hz aggregation)
+    **1. Edge Layer (Devices VM)**
+    - 🌊 Water sensors (30 publishers across 3 plants)
+    - ⚡ Edge agents (local aggregation & filtering)
+    - 📡 Local MQTT broker (inter-pod communication)
     
-    **Operating Modes:**
-    - **NORMAL**: 60s aggregation window (98% bandwidth reduction)
-    - **DEBUG**: Raw 50Hz passthrough (leak investigation)
-    - **ECONOMY**: 300s aggregation (cloud congestion mitigation)
+    **2. Transport Layer (MQTT VM)**
+    - 🔌 Central MQTT broker (Mosquitto)
+    - 🌐 Gateway between edge and cloud
+    
+    **3. Cloud Layer (Cloud VM)**
+    - 💾 InfluxDB (time-series storage)
+    - 📥 Subscriber (data ingestion)
+    - 🎯 Controller (feedback orchestration)
+    - 📊 This dashboard (visualization)
+    
+    ### Feedback Loop Algorithm
+    
+    The controller implements **Max-Min Fairness**:
+    1. Query InfluxDB for leak events (last 60s)
+    2. Query Prometheus for cloud CPU utilization
+    3. Apply priority rules:
+       - **Leak Priority**: Sites with leaks → DEBUG, others → ECONOMY
+       - **Cloud Capacity**: CPU > 80% → throttle to ECONOMY
+       - **Resource Maximization**: CPU < 20% → all to DEBUG
+       - **Default**: All sites → NORMAL
+    4. Publish mode commands via MQTT every 10s
     """)
 
-# Auto-refresh every 5 seconds
-if time.time() - st.session_state.last_refresh > 5:
-    st.session_state.last_refresh = time.time()
-    st.rerun()
+# Auto-refresh
+time.sleep(1)
+st.rerun()
