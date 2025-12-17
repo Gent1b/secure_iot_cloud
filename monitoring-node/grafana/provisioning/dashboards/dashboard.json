@@ -113,7 +113,7 @@
         {
           "datasource": {
             "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
+            "uid": "influxdb"
           },
           "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"water_pipeline\" and\r\n      r._field == \"pressure_psi\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
           "refId": "A"
@@ -210,7 +210,7 @@
         {
           "datasource": {
             "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
+            "uid": "influxdb"
           },
           "query": "from(bucket: \"iot_data\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) =>\r\n      r._measurement == \"water_pipeline\" and\r\n      r._field == \"flow_gpm\" and\r\n      r.site_id == \"${site_id}\"\r\n  )\r\n  |> aggregateWindow(every: 10s, fn: mean, createEmpty: false)\r\n  |> yield(name: \"mean\")\r\n",
           "refId": "A"
