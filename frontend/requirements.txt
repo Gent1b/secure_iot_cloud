@@ -1,6 +1,0 @@
-streamlit
-paho-mqtt
-requests
-pandas
-plotly
-prometheus-client

@@ -56,19 +56,6 @@ services:
       - influxdb
       - subscriber
     restart: unless-stopped
-
-  frontend:
-    build:
-      context: ../frontend
-    image: iot-frontend:local
-    pull_policy: never
-    env_file:
-      - /opt/iot-env/cloud.env
-    environment:
-      BROKER: "${BROKER:-54.93.230.47}"  # Use public IP for MQTT broker connectivity
-    ports:
-      - "8501:8501"
-    restart: unless-stopped
     
   node-exporter:
     image: prom/node-exporter:latest

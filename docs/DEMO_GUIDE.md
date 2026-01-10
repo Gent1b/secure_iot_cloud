@@ -1,33 +1,21 @@
 # Thesis Demo Guide
 
-This guide explains how to demonstrate the "Secure IoT System with Edge Computing" using the new Control Panel.
+This guide explains how to demonstrate the "Secure IoT System with Edge Computing" using monitoring tools.
 
-## 1. Accessing the Control Panel
-After deploying the **Dynamic Scenario**, the frontend dashboard is available at:
+## 1. Monitoring the System
 
-```
-http://<CLOUD_PUBLIC_IP>:8501
-```
+After deploying the **Dynamic Scenario**, you can monitor the system through:
 
-*(Ensure Port 8501 is open in your AWS Security Group)*
+- **Grafana Dashboards**: `http://<MONITORING_PUBLIC_IP>:3000`
+- **InfluxDB**: Query the `water_pipeline` measurement
+- **MQTT Topics**: Subscribe to `iot/control/#` and `iot/data/#`
 
-## 2. Dashboard Features
+## 2. System States
 
-### System State
-The dashboard shows the real-time operating mode of each plant:
+The system operates in three modes for each plant:
 *   **NORMAL:** Standard operation (1-minute aggregation).
 *   **DEBUG:** High-frequency mode (Raw data), triggered by Leaks or Low Cloud Load.
 *   **ECONOMY:** Bandwidth-saving mode (5-minute aggregation), triggered by High Cloud Load.
-
-### Simulation Controls
-Use the sidebar buttons to inject synthetic events:
-*   **🔥 LEAK (Plant A/B):** Sends a high-flow, low-pressure reading.
-    *   *Expected Result:* Controller detects leak -> Switches site to **DEBUG** mode.
-*   **✅ Normal (Plant A/B):** Sends standard telemetry.
-    *   *Expected Result:* If leak is resolved, Controller eventually switches back to **NORMAL**.
-
-### Live Log
-The bottom panel shows the raw MQTT messages on `iot/control/#` (Controller decisions) and `iot/data/#` (Edge telemetry).
 
 ## 3. Step-by-Step Demo Script
 
