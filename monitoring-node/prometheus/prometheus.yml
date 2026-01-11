@@ -6,29 +6,26 @@ scrape_configs:
   # ========= CLOUD NODE =========
   - job_name: 'telegraf'
     static_configs:
-      - targets: ['172.31.33.61:9273']   # telegraf on cloud-node
+      - targets: ['10.0.0.3:9273']   # telegraf on cloud-node
 
   - job_name: 'subscriber'
     static_configs:
-      - targets: ['172.31.33.61:8000']   # subscriber metrics
+      - targets: ['10.0.0.3:8000']   # subscriber metrics
 
   - job_name: 'cloud_node_exporter'
     static_configs:
-      - targets: ['172.31.33.61:9100']   # your cloud-node internal IP
+      - targets: ['10.0.0.3:9100']   # cloud-node internal IP
 
 
   # ========= MQTT NODE =========
-  # - job_name: 'broker_monitor'
-  #   static_configs:
-  #     - targets: ['172.31.39.30:8001']    # broker monitor metrics (DISABLED)
+  - job_name: 'mqtt_telegraf'
+    static_configs:
+      - targets: ['10.0.0.4:9273']    # MQTT node telegraf metrics
 
-  - job_name: 'mqtt_monitor'
-    static_configs:
-      - targets: ['172.31.39.30:9273']    # MQTT telegraf metrics
   # ========= DEVICE NODE =========
-  - job_name: '[publishers]'
+  - job_name: 'devices_telegraf'
     static_configs:
-      - targets: ['172.31.44.105:9273']    # Publishers metrics
+      - targets: ['10.0.0.2:9273']    # Devices node telegraf metrics
 
   # ========= NODE EXPORTER (DISABLED) =========
   # You don’t have node exporter yet — uncomment later if installed.

@@ -6,7 +6,7 @@ services:
     volumes:
       - ./influxdb_data:/var/lib/influxdb2
     env_file:
-      - /opt/iot-env/cloud.env
+      - /opt/iot/.env
     environment:
       DOCKER_INFLUXDB_INIT_MODE: "setup"
       DOCKER_INFLUXDB_INIT_USERNAME: "admin"
@@ -22,9 +22,9 @@ services:
     image: iot-subscriber:local
     pull_policy: never
     env_file:
-      - /opt/iot-env/cloud.env
+      - /opt/iot/.env
     environment:
-      BROKER: "${BROKER:-54.93.230.47}"
+      BROKER: "${BROKER:-10.0.0.4}"
       INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
       INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
       INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
@@ -44,14 +44,14 @@ services:
     image: iot-controller:local
     pull_policy: never
     env_file:
-      - /opt/iot-env/cloud.env
+      - /opt/iot/.env
     environment:
-      BROKER: "${BROKER:-54.93.230.47}"
+      BROKER: "${BROKER:-10.0.0.4}"
       INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
       INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
       INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
-      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://172.31.42.61:9090}"
+      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://10.0.0.5:9090}"
     depends_on:
       - influxdb
       - subscriber

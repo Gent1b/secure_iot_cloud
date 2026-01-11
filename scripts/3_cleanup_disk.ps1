@@ -2,7 +2,7 @@
 # Prunes unused Docker images and system data to free up space.
 # Usage: .\scripts\3_cleanup_disk.ps1
 
-$HOSTS = @("mqtt", "monitoring", "cloud", "devices")
+$HOSTS = @("mqtt", "monitor", "cloud", "devices")
 
 Write-Host "========================================" -ForegroundColor Magenta
 Write-Host " 3. DISK CLEANUP (Docker Prune)"

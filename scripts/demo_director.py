@@ -5,7 +5,7 @@ import argparse
 import paho.mqtt.client as mqtt
 
 # Configuration
-BROKER = "172.31.39.30" # MQTT Node Private IP
+BROKER = "10.0.0.4" # MQTT Node Internal IP
 PORT = 1883
 TOPIC = "iot/data/plant-a" # Inject directly to Central Broker as if from Edge Agent
 

@@ -18,7 +18,7 @@ LOCAL_PORT = int(os.getenv("LOCAL_PORT", 1883))
 LOCAL_TOPIC = os.getenv("LOCAL_TOPIC", "iot/devices")
 
 # Central Broker (Output to Cloud + Input for Commands)
-CENTRAL_BROKER = os.getenv("CENTRAL_BROKER", "54.93.230.47")
+CENTRAL_BROKER = os.getenv("CENTRAL_BROKER", "34.185.144.185")
 CENTRAL_PORT = int(os.getenv("CENTRAL_PORT", 1883))
 CENTRAL_TOPIC_DATA = os.getenv("CENTRAL_TOPIC_DATA", "iot/data")
 CENTRAL_TOPIC_CONTROL = os.getenv("CENTRAL_TOPIC_CONTROL", "iot/control")

@@ -6,7 +6,7 @@ services:
     volumes:
       - ./influxdb_data:/var/lib/influxdb2
     env_file:
-      - /opt/iot-env/cloud.env
+      - /opt/iot/.env
     environment:
       DOCKER_INFLUXDB_INIT_MODE: "setup"
       DOCKER_INFLUXDB_INIT_USERNAME: "admin"
@@ -24,7 +24,7 @@ services:
     env_file:
       - /opt/iot-env/cloud.env
     environment:
-      BROKER: "${BROKER:-54.93.230.47}"
+      BROKER: "${BROKER:-10.0.0.4}"
       INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
       INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
       INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"

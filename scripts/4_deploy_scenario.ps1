@@ -8,7 +8,7 @@ param(
     [string]$Scenario
 )
 
-$REPO_DIR = "secure_iot_cloud"
+$REPO_DIR = "/root/secure_iot_cloud"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host " 4. DEPLOY SCENARIO: $Scenario"
@@ -18,40 +18,40 @@ Write-Host "========================================" -ForegroundColor Green
 if ($Scenario -eq "baseline") {
     Write-Host ">>> Starting Baseline (Docker on all nodes)..."
     
-    # 0. Deploy environment files
-    Write-Host ">>> Deploying environment files..."
-    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
-    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
-    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
+    # 0. Deploy environment file
+    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
+    foreach ($node in @("cloud", "monitor", "mqtt")) {
+        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
+    }
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
     
     # 2. Monitoring
-    ssh monitoring "cd $REPO_DIR/monitoring-node && docker compose up -d"
+    ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
     # 3. Cloud (Standard)
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.yml up -d"
     
     # 4. Devices (Docker) - Set environment variables for baseline
-    ssh devices "cd $REPO_DIR/device-node && BROKER=54.93.230.47 MQTT_TOPIC=iot/devices DEVICES_PER_CONTAINER=10 PUBLISH_INTERVAL=0.02 docker compose up -d"
+    ssh devices "cd $REPO_DIR/device-node && BROKER=34.185.144.185 MQTT_TOPIC=iot/devices DEVICES_PER_CONTAINER=10 PUBLISH_INTERVAL=0.02 docker compose up -d"
 }
 
 # --- SCENARIO B: STATIC EDGE ---
 if ($Scenario -eq "static") {
     Write-Host ">>> Starting Static Edge (K3s on Devices)..."
     
-    # 0. Deploy environment files
-    Write-Host ">>> Deploying environment files..."
-    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
-    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
-    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
+    # 0. Deploy environment file
+    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
+    foreach ($node in @("cloud", "monitor", "mqtt", "devices")) {
+        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
+    }
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
     
     # 2. Monitoring
-    ssh monitoring "cd $REPO_DIR/monitoring-node && docker compose up -d"
+    ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
     # 3. Cloud (Edge Mode)
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.edge.yml up -d"
@@ -66,16 +66,16 @@ if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Dynamic Edge (Feedback Loop)..."
     
     # 0. Deploy environment files
-    Write-Host ">>> Deploying environment files..."
-    ssh cloud "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/cloud.env /opt/iot-env/cloud.env"
-    ssh monitoring "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/monitor.env /opt/iot-env/monitor.env"
-    ssh mqtt "sudo mkdir -p /opt/iot-env && sudo cp ~/secure_iot_cloud/env-files/mqtt.env /opt/iot-env/mqtt.env"
-    
+    Write-Host ">>> Deploying en
+    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
+    foreach ($node in @("cloud", "monitor", "mqtt", "devices")) {
+        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
+    }
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
     
     # 2. Monitoring
-    ssh monitoring "cd $REPO_DIR/monitoring-node && docker compose up -d"
+    ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
     # 3. Cloud (Dynamic Mode + Controller)
     ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.dynamic.yml up -d --build"

@@ -5,7 +5,7 @@ services:
     image: iot-publisher:local
     pull_policy: never
     environment:
-      BROKER: "${BROKER:-54.93.230.47}"
+      BROKER: "${BROKER:-34.185.144.185}"
       MQTT_TOPIC: "${MQTT_TOPIC:-iot/devices}"
       DEVICES_PER_CONTAINER: "${DEVICES_PER_CONTAINER:-10}"
       PUBLISH_INTERVAL: "${PUBLISH_INTERVAL:-0.02}"

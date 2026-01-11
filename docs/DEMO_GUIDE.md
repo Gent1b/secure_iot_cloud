@@ -19,15 +19,15 @@ The system operates in three modes for each plant:
 
 ## 3. Step-by-Step Demo Script
 
-1.  **Baseline:** Show the dashboard. All sites should be in **NORMAL** mode (or DEBUG if cloud is idle).
-2.  **Trigger Leak:** Click **🔥 LEAK (Plant A)**.
+1.  **Baseline:** Monitor Grafana dashboards. All sites should be in **NORMAL** mode (or DEBUG if cloud is idle).
+2.  **Trigger Leak:** Use the publisher or edge agent to inject a leak event.
 3.  **Observe Reaction:**
-    *   Watch the "System State" for Plant A flip to **DEBUG**.
-    *   Check the "Live Log" for the JSON command: `{"mode": "DEBUG"}`.
-    *   Explain: "The Edge Agent detected the leak (or Cloud did) and the system adapted instantly to capture high-fidelity data."
-4.  **Resolve:** Click **✅ Normal (Plant A)**.
-5.  **Observe Recovery:** After ~1 minute (Controller loop), the system should return to **NORMAL**.
+    *   Watch Grafana metrics for Plant A to show leak detection.
+    *   Subscribe to MQTT topic `iot/control/plant-a` to see the JSON command: `{"mode": "DEBUG"}`.
+    *   Explain: "The Controller detected the leak and the system adapted instantly to capture high-fidelity data."
+4.  **Observe Recovery:** After the leak is resolved and ~1 minute passes (Controller loop), the system should return to **NORMAL**.
 
 ## 4. Troubleshooting
-*   **No Data?** Click "Reconnect MQTT" in the sidebar.
-*   **Connection Refused?** Check if the Frontend container is running: `docker ps` on Cloud Node.
+*   **No Data in Grafana?** Check if the subscriber and InfluxDB containers are running: `docker ps` on Cloud Node.
+*   **MQTT Issues?** Verify broker connectivity: `mosquitto_sub -h <BROKER_IP> -t "iot/data/#" -c 1`
+

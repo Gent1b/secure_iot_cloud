@@ -4,15 +4,15 @@ datasources:
     uid: influxdb
     type: influxdb
     access: proxy
-    url: "${INFLUXDB_URL}"
+    url: "http://10.0.0.3:8086"
     isDefault: true
     jsonData:
       httpMode: POST
-      organization: "${INFLUXDB_ORG}"
+      organization: "secure_iot"
       version: Flux
-      defaultBucket: "${INFLUXDB_BUCKET}"
+      defaultBucket: "iot_data"
     secureJsonData:
-      token: "${INFLUXDB_TOKEN}"
+      token: "local_token_123"
 
   - name: Prometheus
     uid: prometheus

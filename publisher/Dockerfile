@@ -1,9 +1,12 @@
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY device.py /app/
+# Install dependencies
+RUN pip install --no-cache-dir paho-mqtt
 
-RUN pip install --no-cache-dir paho-mqtt prometheus_client
+# Copy Code
+COPY device.py .
 
-CMD ["python", "device.py"]
+# Run the water pump simulation
+CMD ["python", "-u", "device.py"]
