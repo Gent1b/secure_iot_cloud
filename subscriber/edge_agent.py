@@ -76,6 +76,7 @@ def aggregate_data(device_id, records):
     """
     Compresses a list of records into a single average record.
     Preserves categorical fields (valve_position, pump_status) from last record.
+    Preserves MAX leak_flag to ensure safety Critical events are not lost.
     """
     if not records:
         return None
@@ -88,6 +89,12 @@ def aggregate_data(device_id, records):
     # Use the last record for timestamp and categorical fields
     last_record = records[-1]
     
+    # SAFETY FIX: PRESERVE LEAK FLAG
+    # Check if ANY record in the buffer has a leak_flag (ground truth)
+    # This ensures that even if the alert was missed or threshold was edge-case,
+    # the cloud gets the signal.
+    max_leak_flag = max((r.get("leak_flag", 0) for r in records), default=0)
+    
     return {
         "device_id": device_id,
         "site_id": SITE_ID,
@@ -98,7 +105,8 @@ def aggregate_data(device_id, records):
         "pump_status": last_record.get("pump_status", 0),
         "tank_level_pct": round(avg_level, 2),
         "aggregation_count": count,
-        "mode": CURRENT_MODE
+        "mode": CURRENT_MODE,
+        "leak_flag": max_leak_flag
     }
 
 # ---------------------------------------------------------------------

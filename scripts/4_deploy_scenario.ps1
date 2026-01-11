@@ -65,24 +65,21 @@ if ($Scenario -eq "static") {
 if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Dynamic Edge (Feedback Loop)..."
     
-    # 0. Deploy environment files
-    Write-Host ">>> Deploying en
-    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
-    foreach ($node in @("cloud", "monitor", "mqtt", "devices")) {
-        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
-    }
     # 1. MQTT
-    ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
+    Write-Host ">>> Starting MQTT broker..." -ForegroundColor Yellow
+    ssh mqtt "cd $REPO_DIR/mqtt-node; docker compose up -d"
     
     # 2. Monitoring
-    ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
+    Write-Host ">>> Starting Monitoring stack..." -ForegroundColor Yellow
+    ssh monitor "cd $REPO_DIR/monitoring-node; docker compose up -d"
     
     # 3. Cloud (Dynamic Mode + Controller)
-    ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.dynamic.yml up -d --build"
+    Write-Host ">>> Starting Cloud services (subscriber + controller)..." -ForegroundColor Yellow
+    ssh cloud "cd $REPO_DIR/cloud-node; docker compose -f docker-compose.dynamic.yml up -d"
     
     # 4. Devices (K3s Dynamic)
-    # We ensure both the current script and the referenced static script are executable and have correct line endings
-    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic && sed -i 's/\r$//' deploy.sh && sed -i 's/\r$//' ../02_edge_static/deploy.sh && chmod +x ../02_edge_static/deploy.sh && chmod +x deploy.sh && ./deploy.sh"
+    Write-Host ">>> Deploying edge agents to K3s..." -ForegroundColor Yellow
+    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic; sed -i 's/\r$//' deploy.sh; sed -i 's/\r$//' ../02_edge_static/deploy.sh; chmod +x ../02_edge_static/deploy.sh; chmod +x deploy.sh; ./deploy.sh"
 }
 
 Write-Host "✅ Deployment command sent. Check Grafana/InfluxDB for data." -ForegroundColor Green

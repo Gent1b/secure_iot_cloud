@@ -27,10 +27,11 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host " 2. DEPLOY ENVIRONMENT FILE"
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Deploy .env to ALL nodes
+# Deploy .env from local machine to ALL nodes via SCP
 Write-Host ">>> Deploying .env to all nodes..." -ForegroundColor Yellow
 foreach ($H in $HOSTS) {
-    ssh $H "mkdir -p /opt/iot && cp $REPO_DIR/.env /opt/iot/.env"
+    ssh $H "mkdir -p /opt/iot"
+    scp .env ${H}:/opt/iot/.env
 }
 
 Write-Host "✅ All nodes updated and .env deployed." -ForegroundColor Green

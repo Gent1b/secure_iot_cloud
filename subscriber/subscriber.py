@@ -125,26 +125,32 @@ def process_water_sim_data(data, mqtt_receipt_time):
     avg_pressure = sum(_win_pressure[device_id]) / len(_win_pressure[device_id])
     avg_flow = sum(_win_flow[device_id]) / len(_win_flow[device_id])
     
-    # 2. Leak Detection Logic (Edge Intelligence)
+    # 2. Leak Detection Logic (Edge Intelligence / Global Validation)
     # Symptom: High Flow but Low Pressure (Fluid escaping before sensor)
     # Simplify: If Valve is open, Flow should be proportional to Pressure.
     # If Flow is HIGH but Pressure is suspiciously LOW, that's a leak.
     
-    is_leak = False
-    is_alert = False
+    # Cloud Validation Logic (Physics Based)
+    is_cloud_detected_leak = False
     
     expected_flow = pressure * valve * 0.05
-    # If observed flow is significantly higher than physics suggests
     if valve > 10 and flow > (expected_flow + 15.0):
-        # Additional check: Make sure we actually have pressure (avoid startup noise)
-        is_leak = True
-        leaks_detected.inc()
-        is_alert = True
-        
+        is_cloud_detected_leak = True
+        leaks_detected.inc() # Increment Prometheus Metric for "Cloud Detections"
+        is_alert = True # Treat as alert for immediate storage tagging
+
+    # GROUND TRUTH RECONCILIATION
+    # The record might come with a 'leak_flag' from the Edge (Ground Truth or Aggregated Truth).
+    # If available, we trust it for the 'leak_flag' field in InfluxDB, 
+    # to ensure the feedback loop triggers on the Sensor's truth, not just our estimation.
+    # If not present (legacy or stripped), we fall back to cloud detection.
+    
+    final_leak_flag = int(data.get("leak_flag", is_cloud_detected_leak))
+
     return {
         "pressure_avg": round(avg_pressure, 2),
         "flow_avg": round(avg_flow, 2),
-        "leak_flag": int(is_leak),
+        "leak_flag": final_leak_flag,
     }, is_alert
 
 # ---------------------------------------------------------------------
