@@ -12,6 +12,11 @@ scrape_configs:
     static_configs:
       - targets: ['10.0.0.3:8000']   # subscriber metrics
 
+  - job_name: 'controller'
+    static_configs:
+      - targets: ['10.0.0.3:8001']   # controller metrics (decisions)
+
+
   - job_name: 'cloud_node_exporter'
     static_configs:
       - targets: ['10.0.0.3:9100']   # cloud-node internal IP

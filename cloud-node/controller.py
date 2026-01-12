@@ -5,6 +5,16 @@ import logging
 import requests
 import paho.mqtt.client as mqtt
 from influxdb_client import InfluxDBClient
+from prometheus_client import start_http_server, Counter
+
+# ---------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------
+DECISION_COUNTER = Counter(
+    'controller_decisions_total',
+    'Number of control feedback decisions made',
+    ['site_id', 'target_mode', 'reason']
+)
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -127,26 +137,31 @@ def enforce_fairness(site_states, cloud_cpu):
         for site in SITES:
             if site in leaking_sites:
                 commands[site] = "DEBUG"   # 50Hz Raw Data
+                DECISION_COUNTER.labels(site_id=site, target_mode="DEBUG", reason="leak_priority").inc()
             else:
                 commands[site] = "ECONOMY" # Throttle to save bandwidth for the leak
+                DECISION_COUNTER.labels(site_id=site, target_mode="ECONOMY", reason="leak_throttle").inc()
                 
     # SCENARIO 2: CLOUD CONGESTION (High CPU)
     elif cloud_cpu > 80.0:
         log.info(f"SCENARIO: CLOUD CONGESTION (CPU {cloud_cpu}%). Throttling all sites.")
         for site in SITES:
             commands[site] = "ECONOMY"
+            DECISION_COUNTER.labels(site_id=site, target_mode="ECONOMY", reason="congestion_control").inc()
             
     # SCENARIO 3: CLOUD IDLE (Resource Maximization)
     elif cloud_cpu < 20.0:
         log.info(f"SCENARIO: CLOUD IDLE (CPU {cloud_cpu}%). Requesting High-Fidelity Data.")
         for site in SITES:
             commands[site] = "DEBUG" # Send everything! We have space.
+            DECISION_COUNTER.labels(site_id=site, target_mode="DEBUG", reason="idle_utilization").inc()
             
     # SCENARIO 4: NORMAL OPERATION
     else:
         log.info(f"SCENARIO: NORMAL OPERATION (CPU {cloud_cpu}%).")
         for site in SITES:
             commands[site] = "NORMAL"
+            DECISION_COUNTER.labels(site_id=site, target_mode="NORMAL", reason="normal_operation").inc()
             
     return commands
 
@@ -161,6 +176,10 @@ def send_commands(commands):
 # Main Loop
 # ---------------------------------------------------------------------
 def main():
+    # Start Prometheus Metrics Server
+    start_http_server(8000)
+    log.info("Metrics server started on port 8000")
+
     connect_mqtt()
     
     log.info("Starting Feedback Control Loop...")

@@ -55,6 +55,8 @@ services:
     depends_on:
       - influxdb
       - subscriber
+    ports:
+      - "8001:8000"
     restart: unless-stopped
     
   node-exporter:

@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY controller.py /app/
 
-RUN pip install --no-cache-dir paho-mqtt influxdb-client requests
+RUN pip install --no-cache-dir paho-mqtt influxdb-client requests prometheus-client
 
 CMD ["python", "-u", "controller.py"]
