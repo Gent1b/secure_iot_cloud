@@ -18,12 +18,6 @@ Write-Host "========================================" -ForegroundColor Green
 if ($Scenario -eq "baseline") {
     Write-Host ">>> Starting Baseline (Docker on all nodes)..."
     
-    # 0. Deploy environment file
-    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
-    foreach ($node in @("cloud", "monitor", "mqtt")) {
-        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
-    }
-    
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
     
@@ -40,12 +34,6 @@ if ($Scenario -eq "baseline") {
 # --- SCENARIO B: STATIC EDGE ---
 if ($Scenario -eq "static") {
     Write-Host ">>> Starting Static Edge (K3s on Devices)..."
-    
-    # 0. Deploy environment file
-    Write-Host ">>> Deploying .env file..." -ForegroundColor Yellow
-    foreach ($node in @("cloud", "monitor", "mqtt", "devices")) {
-        ssh $node "mkdir -p /opt/iot && cp /root/secure_iot_cloud/.env /opt/iot/.env"
-    }
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
