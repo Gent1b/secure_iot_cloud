@@ -28,6 +28,11 @@ SUBSCRIBER_QUEUE_MAX = int(os.getenv("SUBSCRIBER_QUEUE_MAX", "10000"))
 INFLUX_BATCH_SIZE = int(os.getenv("INFLUX_BATCH_SIZE", "50"))
 ROLLING_WINDOW_SIZE = int(os.getenv("ROLLING_WINDOW_SIZE", "10"))
 
+# THESIS FIX #2: Detection Responsibility Separation
+# centralized = Cloud performs leak detection (Baseline scenario)
+# edge = Trust edge-provided leak_flag (Static/Dynamic scenarios)
+DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "centralized")
+
 # ---------------------------------------------------------------------
 # Setup Logging
 # ---------------------------------------------------------------------
@@ -125,27 +130,29 @@ def process_water_sim_data(data, mqtt_receipt_time):
     avg_pressure = sum(_win_pressure[device_id]) / len(_win_pressure[device_id])
     avg_flow = sum(_win_flow[device_id]) / len(_win_flow[device_id])
     
-    # 2. Leak Detection Logic (Edge Intelligence / Global Validation)
-    # Symptom: High Flow but Low Pressure (Fluid escaping before sensor)
-    # Simplify: If Valve is open, Flow should be proportional to Pressure.
-    # If Flow is HIGH but Pressure is suspiciously LOW, that's a leak.
+    # 2. Leak Detection Logic (THESIS-ALIGNED)
+    # Responsibility varies by deployment mode:
+    # - CENTRALIZED: Cloud performs physics-based leak detection
+    # - EDGE: Cloud trusts edge-provided leak_flag (no re-computation)
     
-    # Cloud Validation Logic (Physics Based)
-    is_cloud_detected_leak = False
+    is_alert = False
     
-    expected_flow = pressure * valve * 0.05
-    if valve > 10 and flow > (expected_flow + 15.0):
-        is_cloud_detected_leak = True
-        leaks_detected.inc() # Increment Prometheus Metric for "Cloud Detections"
-        is_alert = True # Treat as alert for immediate storage tagging
-
-    # GROUND TRUTH RECONCILIATION
-    # The record might come with a 'leak_flag' from the Edge (Ground Truth or Aggregated Truth).
-    # If available, we trust it for the 'leak_flag' field in InfluxDB, 
-    # to ensure the feedback loop triggers on the Sensor's truth, not just our estimation.
-    # If not present (legacy or stripped), we fall back to cloud detection.
-    
-    final_leak_flag = int(data.get("leak_flag", is_cloud_detected_leak))
+    if DEPLOYMENT_MODE == "centralized":
+        # Baseline Scenario: Cloud performs leak detection
+        expected_flow = pressure * valve * 0.05
+        if valve > 10 and flow > (expected_flow + 15.0):
+            final_leak_flag = 1
+            leaks_detected.inc()
+            is_alert = True
+            log.warning(f"[CLOUD DETECTION] Leak detected on {device_id}")
+        else:
+            final_leak_flag = 0
+    else:
+        # Edge Scenarios: Trust edge-provided leak_flag
+        final_leak_flag = int(data.get("leak_flag", 0))
+        if final_leak_flag == 1:
+            leaks_detected.inc()  # Count for metrics only
+            is_alert = True
 
     return {
         "pressure_avg": round(avg_pressure, 2),

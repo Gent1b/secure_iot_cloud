@@ -4,7 +4,9 @@ import json
 import logging
 import requests
 import paho.mqtt.client as mqtt
-from influxdb_client import InfluxDBClient
+from collections import deque
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import WritePrecision, SYNCHRONOUS
 from prometheus_client import start_http_server, Counter
 
 # ---------------------------------------------------------------------
@@ -44,6 +46,15 @@ log = logging.getLogger("controller")
 # ---------------------------------------------------------------------
 influx_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 query_api = influx_client.query_api()
+write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+
+# ---------------------------------------------------------------------
+# THESIS FIX #5: Controller State for Stability
+# ---------------------------------------------------------------------
+CURRENT_MODES = {site: "NORMAL" for site in SITES}
+LAST_MODE_CHANGE = {site: 0.0 for site in SITES}
+CPU_HISTORY = deque(maxlen=3)  # 3 samples = 30 seconds of history
+COOLDOWN_SECONDS = 30  # Minimum time between mode changes
 
 # ---------------------------------------------------------------------
 # MQTT Client
@@ -126,51 +137,117 @@ def check_system_state():
 def enforce_fairness(site_states, cloud_cpu):
     """
     Decides the mode for each site based on states and cloud capacity.
+    THESIS FIX #5: Includes hysteresis and cooldown to prevent oscillation.
     """
+    # Update CPU history for smoothing
+    CPU_HISTORY.append(cloud_cpu)
+    avg_cpu = sum(CPU_HISTORY) / len(CPU_HISTORY)
+    
     commands = {}
+    current_time = time.time()
     
     leaking_sites = [s for s, state in site_states.items() if state == "LEAK_DETECTED"]
     
-    # SCENARIO 1: CRITICAL EVENT (Leak)
+    # SCENARIO 1: CRITICAL EVENT (Leak) - ALWAYS takes priority
     if leaking_sites:
-        log.info(f"SCENARIO: CRITICAL LEAK DETECTED. Prioritizing {leaking_sites}")
+        log.info(f"SCENARIO: CRITICAL LEAK DETECTED at {leaking_sites}. avg_cpu={avg_cpu:.1f}%")
         for site in SITES:
             if site in leaking_sites:
-                commands[site] = "DEBUG"   # 50Hz Raw Data
-                DECISION_COUNTER.labels(site_id=site, target_mode="DEBUG", reason="leak_priority").inc()
+                new_mode = "DEBUG"   # 50Hz Raw Data
+                reason = "leak_priority"
             else:
-                commands[site] = "ECONOMY" # Throttle to save bandwidth for the leak
-                DECISION_COUNTER.labels(site_id=site, target_mode="ECONOMY", reason="leak_throttle").inc()
+                new_mode = "ECONOMY" # Throttle to save bandwidth for the leak
+                reason = "leak_throttle"
+            
+            # Apply with cooldown check
+            if new_mode != CURRENT_MODES[site]:
+                if current_time - LAST_MODE_CHANGE[site] >= COOLDOWN_SECONDS:
+                    CURRENT_MODES[site] = new_mode
+                    LAST_MODE_CHANGE[site] = current_time
+                    DECISION_COUNTER.labels(site_id=site, target_mode=new_mode, reason=reason).inc()
+                else:
+                    # Still in cooldown, keep current mode
+                    new_mode = CURRENT_MODES[site]
+            
+            commands[site] = new_mode
                 
-    # SCENARIO 2: CLOUD CONGESTION (High CPU)
-    elif cloud_cpu > 80.0:
-        log.info(f"SCENARIO: CLOUD CONGESTION (CPU {cloud_cpu}%). Throttling all sites.")
+    # SCENARIO 2: CLOUD CONGESTION (High CPU) with Hysteresis
+    elif avg_cpu > 80.0:
+        log.info(f"SCENARIO: CLOUD CONGESTION (avg_cpu={avg_cpu:.1f}%). Throttling all sites.")
         for site in SITES:
-            commands[site] = "ECONOMY"
-            DECISION_COUNTER.labels(site_id=site, target_mode="ECONOMY", reason="congestion_control").inc()
+            new_mode = "ECONOMY"
+            reason = "congestion_control"
             
-    # SCENARIO 3: CLOUD IDLE (Resource Maximization)
-    elif cloud_cpu < 20.0:
-        log.info(f"SCENARIO: CLOUD IDLE (CPU {cloud_cpu}%). Requesting High-Fidelity Data.")
+            if new_mode != CURRENT_MODES[site]:
+                if current_time - LAST_MODE_CHANGE[site] >= COOLDOWN_SECONDS:
+                    CURRENT_MODES[site] = new_mode
+                    LAST_MODE_CHANGE[site] = current_time
+                    DECISION_COUNTER.labels(site_id=site, target_mode=new_mode, reason=reason).inc()
+                else:
+                    new_mode = CURRENT_MODES[site]
+            
+            commands[site] = new_mode
+            
+    # SCENARIO 3: CLOUD IDLE (Resource Maximization) with Exit Hysteresis
+    elif avg_cpu < 20.0:
+        log.info(f"SCENARIO: CLOUD IDLE (avg_cpu={avg_cpu:.1f}%). Requesting High-Fidelity Data.")
         for site in SITES:
-            commands[site] = "DEBUG" # Send everything! We have space.
-            DECISION_COUNTER.labels(site_id=site, target_mode="DEBUG", reason="idle_utilization").inc()
+            new_mode = "DEBUG" # Send everything! We have space.
+            reason = "idle_utilization"
             
-    # SCENARIO 4: NORMAL OPERATION
+            if new_mode != CURRENT_MODES[site]:
+                if current_time - LAST_MODE_CHANGE[site] >= COOLDOWN_SECONDS:
+                    CURRENT_MODES[site] = new_mode
+                    LAST_MODE_CHANGE[site] = current_time
+                    DECISION_COUNTER.labels(site_id=site, target_mode=new_mode, reason=reason).inc()
+                else:
+                    new_mode = CURRENT_MODES[site]
+            
+            commands[site] = new_mode
+            
+    # SCENARIO 4: NORMAL OPERATION (20% < CPU < 80%)
     else:
-        log.info(f"SCENARIO: NORMAL OPERATION (CPU {cloud_cpu}%).")
+        log.info(f"SCENARIO: NORMAL OPERATION (avg_cpu={avg_cpu:.1f}%).")
         for site in SITES:
-            commands[site] = "NORMAL"
-            DECISION_COUNTER.labels(site_id=site, target_mode="NORMAL", reason="normal_operation").inc()
+            # Hysteresis: Stay in ECONOMY if between 60-80%, switch to NORMAL only below 60%
+            if CURRENT_MODES[site] == "ECONOMY" and avg_cpu > 60.0:
+                new_mode = "ECONOMY"  # Stay in economy until clearly below threshold
+                reason = "hysteresis_economy"
+            else:
+                new_mode = "NORMAL"
+                reason = "normal_operation"
+            
+            if new_mode != CURRENT_MODES[site]:
+                if current_time - LAST_MODE_CHANGE[site] >= COOLDOWN_SECONDS:
+                    CURRENT_MODES[site] = new_mode
+                    LAST_MODE_CHANGE[site] = current_time
+                    DECISION_COUNTER.labels(site_id=site, target_mode=new_mode, reason=reason).inc()
+                else:
+                    new_mode = CURRENT_MODES[site]
+            
+            commands[site] = new_mode
             
     return commands
 
 def send_commands(commands):
+    """
+    Publishes mode commands via MQTT and persists decisions to InfluxDB.
+    THESIS FIX #7: Traceability of controller decisions.
+    """
     for site, mode in commands.items():
         topic = f"{TOPIC_CONTROL}/{site}"
         payload = json.dumps({"mode": mode, "timestamp": time.time()})
         mqtt_client.publish(topic, payload, qos=1)
-        # log.info(f"Sent command to {site}: {mode}") # Reduce log noise
+        
+        # THESIS FIX #7: Persist decision event to InfluxDB
+        try:
+            point = Point("controller_decisions") \
+                .tag("site_id", site) \
+                .field("target_mode", mode) \
+                .field("decision_timestamp", time.time())
+            write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
+        except Exception as e:
+            log.error(f"Failed to persist decision for {site}: {e}")
 
 # ---------------------------------------------------------------------
 # Main Loop

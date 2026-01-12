@@ -47,14 +47,15 @@ def main():
     parser = argparse.ArgumentParser(description="Thesis Demo Director")
     parser.add_argument("--action", choices=["leak", "normal", "loop"], required=True, help="Action to perform")
     parser.add_argument("--count", type=int, default=1, help="Number of messages to send")
+    parser.add_argument("--broker", type=str, default="10.0.0.4", help="MQTT Broker Address")
     args = parser.parse_args()
 
     client = mqtt.Client(client_id="demo_director")
     try:
-        print(f"Connecting to {BROKER}...")
-        client.connect(BROKER, PORT, 60)
+        print(f"Connecting to {args.broker}...")
+        client.connect(args.broker, PORT, 60)
     except Exception as e:
-        print(f"Failed to connect: {e}")
+        print(f"Failed to connect to {args.broker}: {e}")
         return
 
     print(f"Executing action: {args.action}")

@@ -42,6 +42,9 @@ m_egress = Counter("edge_egress_messages_total", "Messages sent to cloud")
 m_leaks = Counter("edge_leaks_detected_total", "Leaks detected locally")
 g_mode = Gauge("edge_operating_mode", "Current Mode (0=Economy, 1=Normal, 2=Debug)")
 
+# THESIS FIX #7: Mode Transition Traceability
+m_mode_transitions = Counter("edge_mode_transitions_total", "Mode transitions", ["from_mode", "to_mode"])
+
 start_http_server(8000)
 
 # ---------------------------------------------------------------------
@@ -153,8 +156,11 @@ def on_central_message(client, userdata, msg):
         new_mode = cmd.get("mode")
         
         if new_mode in ["NORMAL", "DEBUG", "ECONOMY"]:
-            log.info(f"Received Command: Change Mode {CURRENT_MODE} -> {new_mode}")
-            CURRENT_MODE = new_mode
+            # THESIS FIX #7: Trace mode transitions
+            if new_mode != CURRENT_MODE:
+                m_mode_transitions.labels(from_mode=CURRENT_MODE, to_mode=new_mode).inc()
+                log.info(f"MODE TRANSITION: {CURRENT_MODE} -> {new_mode} (Reason: Controller Command)")
+                CURRENT_MODE = new_mode
             
             # Update Metric
             val = 1

@@ -20,7 +20,11 @@ BROKER = os.getenv("BROKER", "mqtt_broker")
 PORT = 1883
 TOPIC = os.getenv("MQTT_TOPIC", "iot/devices")
 DEVICES_PER_CONTAINER = int(os.getenv("DEVICES_PER_CONTAINER", 10))
-PUBLISH_INTERVAL = float(os.getenv("PUBLISH_INTERVAL", 1.0))  # Faster for pressure dynamics
+
+# THESIS FIX #4: Deterministic Rate Control
+TARGET_RATE_HZ = int(os.getenv("TARGET_RATE_HZ", 50))  # 50Hz = realistic sensor rate
+PUBLISH_INTERVAL = 1.0 / TARGET_RATE_HZ
+
 BASE_HOSTNAME = os.getenv("HOSTNAME", "sim")
 
 # ---------- Grouping / Topology ----------
@@ -104,7 +108,9 @@ class WaterPumpStation:
         
         self.cycle_timer += 1
         
-        # Random Event: Leak Injection (Rare)
+        # THESIS FIX #3: Deterministic Leak Events
+        # Random events use fixed seed for reproducibility
+        # Leak probability same, but sequence is reproducible
         if not self.leak_active and random.random() < 0.001:  # 0.1% chance per step
             self.leak_active = True
             log.warning("[%s] LEAK STARTED!", self.device_id)
@@ -159,7 +165,10 @@ def simulate_device(device_id):
     connect_with_retry(client, device_id)
     client.loop_start()
 
+    # THESIS FIX #4: Monotonic clock for precise rate control
+    next_publish_time = time.monotonic()
     counter = 0
+    
     while True:
         station.step()
         data = station.get_telemetry()
@@ -176,12 +185,20 @@ def simulate_device(device_id):
         except Exception as e:
             log.error("[%s] Publish error: %s", device_id, e)
             connect_with_retry(client, device_id)
-            
-        time.sleep(PUBLISH_INTERVAL)
+        
+        # Wait until next scheduled time slot (prevents drift)
+        next_publish_time += PUBLISH_INTERVAL
+        sleep_duration = next_publish_time - time.monotonic()
+        if sleep_duration > 0:
+            time.sleep(sleep_duration)
 
 # ---------- Main ----------
 if __name__ == "__main__":
-    log.info("Starting Water Utility Simulator on %s with %d devices...", BASE_HOSTNAME, DEVICES_PER_CONTAINER)
+    # THESIS FIX #3: Deterministic Experiments
+    LEAK_SEED = int(os.getenv("LEAK_SEED", 42))
+    random.seed(LEAK_SEED)
+    log.info("Starting Water Utility Simulator on %s with %d devices (LEAK_SEED=%d)...", 
+             BASE_HOSTNAME, DEVICES_PER_CONTAINER, LEAK_SEED)
     
     threads = []
     for i in range(DEVICES_PER_CONTAINER):
