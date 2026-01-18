@@ -9,6 +9,8 @@ services:
       MQTT_TOPIC: "${MQTT_TOPIC:-iot/devices}"
       DEVICES_PER_CONTAINER: "${DEVICES_PER_CONTAINER:-10}"
       HOSTNAME: "${HOSTNAME:-baseline_sensor}"
+      RUN_ID: "${RUN_ID:-run_unknown}"
+      SCENARIO: "${SCENARIO:-baseline}"
       # THESIS ALIGNMENT: Deterministic rate and leak schedule
       TARGET_RATE_HZ: 50
       LEAK_SEED: 42

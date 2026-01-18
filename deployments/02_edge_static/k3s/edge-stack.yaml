@@ -89,5 +89,11 @@ spec:
         - name: CENTRAL_BROKER
           value: "10.0.0.4" # MQTT VM Internal IP
         - name: AGGREGATION_WINDOW
-          value: "60"
+          value: "1"
+        - name: ECONOMY_WINDOW
+          value: "300"
+        - name: RUN_ID
+          value: "run_unknown"
+        - name: SCENARIO
+          value: "static"
         command: ["python", "edge_agent.py"]

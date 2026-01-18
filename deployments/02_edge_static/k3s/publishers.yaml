@@ -26,3 +26,7 @@ spec:
           value: "10"
         - name: HOSTNAME
           value: "plant-a_sensor"
+        - name: RUN_ID
+          value: "run_unknown"
+        - name: SCENARIO
+          value: "static"

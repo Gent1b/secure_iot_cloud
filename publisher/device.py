@@ -20,6 +20,8 @@ BROKER = os.getenv("BROKER", "mqtt_broker")
 PORT = 1883
 TOPIC = os.getenv("MQTT_TOPIC", "iot/devices")
 DEVICES_PER_CONTAINER = int(os.getenv("DEVICES_PER_CONTAINER", 10))
+RUN_ID = os.getenv("RUN_ID", "run_unknown")
+SCENARIO = os.getenv("SCENARIO", "unknown")
 
 # THESIS FIX #4: Deterministic Rate Control
 TARGET_RATE_HZ = int(os.getenv("TARGET_RATE_HZ", 50))  # 50Hz = realistic sensor rate
@@ -42,9 +44,10 @@ def classify_device_site(device_id: str) -> str:
 
 # ---------- Water System Simulation Class ----------
 class WaterPumpStation:
-    def __init__(self, device_id):
+    def __init__(self, device_id, start_time):
         self.device_id = device_id
         self.site_id = classify_device_site(device_id)
+        self.start_time = start_time
         
         # State Variables
         self.pump_status = 0      # 0=OFF, 1=ON
@@ -108,22 +111,23 @@ class WaterPumpStation:
         
         self.cycle_timer += 1
         
-        # THESIS FIX #3: Deterministic Leak Events
-        # Random events use fixed seed for reproducibility
-        # Leak probability same, but sequence is reproducible
-        if not self.leak_active and random.random() < 0.001:  # 0.1% chance per step
+        # THESIS FIX #3: Deterministic Leak Schedule
+        elapsed = time.time() - self.start_time
+        should_leak = (elapsed >= 60.0) and (elapsed < 180.0)
+        if should_leak and not self.leak_active:
             self.leak_active = True
-            log.warning("[%s] LEAK STARTED!", self.device_id)
-            
-        # Random Event: Leak Repair
-        if self.leak_active and random.random() < 0.05: # 5% chance to fix itself (or be fixed)
+            log.warning("[%s] LEAK STARTED (deterministic)", self.device_id)
+        elif not should_leak and self.leak_active:
             self.leak_active = False
-            log.info("[%s] Leak repaired.", self.device_id)
+            log.info("[%s] Leak repaired (deterministic)", self.device_id)
 
     def get_telemetry(self):
         return {
             "device_id": self.device_id,
             "site_id": self.site_id,
+            "run_id": RUN_ID,
+            "scenario": SCENARIO,
+            "sample_kind": "raw",
             "timestamp": time.time(),
             "pressure_psi": round(self.pressure_psi, 2),
             "flow_gpm": round(self.flow_gpm, 2),
@@ -131,7 +135,7 @@ class WaterPumpStation:
             "pump_status": self.pump_status,
             "tank_level_pct": round(self.tank_level, 2),
             "maintenance_mode": self.maintenance_mode,
-            "leak_flag": int(self.leak_active) # Ground truth for validation (optional to send)
+            "leak_truth": int(self.leak_active)
         }
 
 # ---------- MQTT Helpers ----------
@@ -155,7 +159,8 @@ def on_disconnect(client, userdata, rc):
 # ---------- Device Simulation Loop ----------
 def simulate_device(device_id):
     # Initialize Physics Model
-    station = WaterPumpStation(device_id)
+    start_time = time.time()
+    station = WaterPumpStation(device_id, start_time)
     
     client = mqtt.Client(client_id=device_id)
     client.user_data_set({"device_id": device_id})
@@ -208,127 +213,5 @@ if __name__ == "__main__":
         threads.append(t)
         time.sleep(0.1)
         
-    for t in threads:
-        t.join()
-
-# ---------- Configuration ----------
-BROKER = os.getenv("BROKER", "mqtt_broker")
-PORT = 1883
-TOPIC = os.getenv("MQTT_TOPIC", "iot/devices")
-DEVICES_PER_CONTAINER = int(os.getenv("DEVICES_PER_CONTAINER", 50))
-PUBLISH_INTERVAL = float(os.getenv("PUBLISH_INTERVAL", 10))
-
-# ---------- Grouping / topology (no envs) ----------
-SITES = ["plant-a", "plant-b", "plant-c"]  # logical CI sites
-
-
-def classify_device_site(device_id: str) -> str:
-    """
-    Derive a site_id deterministically from the device index.
-    Assumes device_id looks like '<base>_<index>'.
-    """
-    try:
-        idx_raw = int(device_id.rsplit("_", 1)[1])
-    except (ValueError, IndexError):
-        idx_raw = 1
-
-    idx = max(idx_raw - 1, 0)
-    site_id = SITES[idx % len(SITES)]
-    return site_id
-
-
-# ---------- Sensor data ----------
-def generate_sensor_data(device_id):
-    temperature = round(random.uniform(20.0, 30.0), 2)
-    humidity = round(random.uniform(40.0, 60.0), 2)
-
-    # occasional spikes
-    if random.random() < 0.1:
-        temperature += random.uniform(10.0, 20.0) * random.choice([-1, 1])
-        humidity += random.uniform(10.0, 20.0) * random.choice([-1, 1])
-
-    site_id = classify_device_site(device_id)
-
-    return {
-        "device_id": device_id,
-        "site_id": site_id,
-        "temperature": round(temperature, 2),
-        "humidity": round(humidity, 2),
-    }
-
-
-# ---------- MQTT helpers ----------
-def connect_with_retry(client, device_id):
-    """Try to connect until the broker is available."""
-    delay = 2
-    while True:
-        try:
-            client.connect(BROKER, PORT, keepalive=300)
-            log.info("[%s] Connected to broker %s:%d", device_id, BROKER, PORT)
-            return
-        except Exception as e:
-            log.warning(
-                "[%s] Connection failed (%s); retrying in %ds",
-                device_id,
-                e,
-                delay,
-            )
-            time.sleep(delay)
-            delay = min(delay * 2, 30)  # exponential backoff
-
-
-def on_disconnect(client, userdata, rc):
-    """Triggered when MQTT connection is lost."""
-    if rc != 0:
-        log.warning("[%s] Disconnected (rc=%s). Reconnecting…", userdata["device_id"], rc)
-        connect_with_retry(client, userdata["device_id"])
-
-
-# ---------- Device simulation ----------
-def simulate_device(device_id):
-    client = mqtt.Client(client_id=f"{device_id}")
-    client.user_data_set({"device_id": device_id})
-    client.enable_logger()
-    client.on_disconnect = on_disconnect
-    client.reconnect_delay_set(min_delay=2, max_delay=30)
-
-    # add random startup delay to avoid connection storm
-    time.sleep(random.uniform(0, 3))
-
-    # connect initially
-    connect_with_retry(client, device_id)
-    client.loop_start()
-
-    counter = 0
-    while True:
-        payload = json.dumps(generate_sensor_data(device_id))
-        try:
-            result = client.publish(TOPIC, payload, qos=0)
-            if result.rc != mqtt.MQTT_ERR_SUCCESS:
-                log.warning("[%s] Publish failed (rc=%s)", device_id, result.rc)
-            counter += 1
-            if counter % 100 == 0:
-                log.info("[%s] Published %d messages", device_id, counter)
-        except Exception as e:
-            log.error("[%s] Publish exception (%s); reconnecting…", device_id, e)
-            connect_with_retry(client, device_id)
-        time.sleep(PUBLISH_INTERVAL)
-
-
-# ---------- Main ----------
-if __name__ == "__main__":
-    base = os.getenv("HOSTNAME", "sim")
-    log.info(
-        "Starting simulator on %s, creating %d virtual devices",
-        base,
-        DEVICES_PER_CONTAINER,
-    )
-    threads = []
-    for i in range(DEVICES_PER_CONTAINER):
-        device_id = f"{base}_{i+1}"
-        t = threading.Thread(target=simulate_device, args=(device_id,), daemon=True)
-        t.start()
-        threads.append(t)
-        time.sleep(0.05)  # small stagger helps prevent startup burst
     for t in threads:
         t.join()

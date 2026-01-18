@@ -24,11 +24,20 @@ CENTRAL_TOPIC_DATA = os.getenv("CENTRAL_TOPIC_DATA", "iot/data")
 CENTRAL_TOPIC_CONTROL = os.getenv("CENTRAL_TOPIC_CONTROL", "iot/control")
 
 SITE_ID = os.getenv("SITE_ID", "site_a")
+RUN_ID = os.getenv("RUN_ID", "run_unknown")
+SCENARIO = os.getenv("SCENARIO", "unknown")
 
 # Tunables
-AGGREGATION_WINDOW = int(os.getenv("AGGREGATION_WINDOW", 60)) # seconds
+AGGREGATION_WINDOW = int(os.getenv("AGGREGATION_WINDOW", 1)) # seconds (NORMAL)
+ECONOMY_WINDOW = int(os.getenv("ECONOMY_WINDOW", 300)) # seconds (ECONOMY)
 # Modes: NORMAL (1Hz avg), DEBUG (Raw 50Hz), ECONOMY (5min avg)
 CURRENT_MODE = "NORMAL" 
+
+MODE_CODE = {
+    "NORMAL": 0,
+    "DEBUG": 1,
+    "ECONOMY": 2,
+}
 
 # ---------------------------------------------------------------------
 # Logging & Metrics
@@ -50,8 +59,16 @@ start_http_server(8000)
 # ---------------------------------------------------------------------
 # State & Buffers
 # ---------------------------------------------------------------------
-# Buffer for aggregation: device_id -> list of records
-data_buffer = defaultdict(list)
+# Buffer for aggregation: device_id -> running stats
+data_buffer = defaultdict(lambda: {
+    "count": 0,
+    "sum_pressure": 0.0,
+    "sum_flow": 0.0,
+    "sum_level": 0.0,
+    "max_leak_truth": 0,
+    "max_leak_detected": 0,
+    "last_record": None,
+})
 buffer_lock = threading.Lock()
 
 # ---------------------------------------------------------------------
@@ -75,33 +92,29 @@ def detect_leak(record):
         pass
     return False
 
-def aggregate_data(device_id, records):
+def aggregate_data(device_id, stats):
     """
-    Compresses a list of records into a single average record.
+    Compresses running stats into a single average record.
     Preserves categorical fields (valve_position, pump_status) from last record.
-    Preserves MAX leak_flag to ensure safety Critical events are not lost.
+    Preserves MAX leak_truth and leak_detected.
     """
-    if not records:
+    if not stats or stats["count"] == 0:
         return None
-        
-    count = len(records)
-    avg_pressure = sum(r["pressure_psi"] for r in records) / count
-    avg_flow = sum(r["flow_gpm"] for r in records) / count
-    avg_level = sum(r["tank_level_pct"] for r in records) / count
-    
-    # Use the last record for timestamp and categorical fields
-    last_record = records[-1]
-    
-    # SAFETY FIX: PRESERVE LEAK FLAG
-    # Check if ANY record in the buffer has a leak_flag (ground truth)
-    # This ensures that even if the alert was missed or threshold was edge-case,
-    # the cloud gets the signal.
-    max_leak_flag = max((r.get("leak_flag", 0) for r in records), default=0)
-    
+
+    count = stats["count"]
+    avg_pressure = stats["sum_pressure"] / count
+    avg_flow = stats["sum_flow"] / count
+    avg_level = stats["sum_level"] / count
+
+    last_record = stats["last_record"] or {}
+
     return {
         "device_id": device_id,
         "site_id": SITE_ID,
-        "timestamp": last_record["timestamp"],
+        "run_id": last_record.get("run_id", RUN_ID),
+        "scenario": last_record.get("scenario", SCENARIO),
+        "sample_kind": "agg",
+        "timestamp": last_record.get("timestamp", time.time()),
         "pressure_psi": round(avg_pressure, 2),
         "flow_gpm": round(avg_flow, 2),
         "valve_position": last_record.get("valve_position", 0),
@@ -109,7 +122,9 @@ def aggregate_data(device_id, records):
         "tank_level_pct": round(avg_level, 2),
         "aggregation_count": count,
         "mode": CURRENT_MODE,
-        "leak_flag": max_leak_flag
+        "mode_code": MODE_CODE.get(CURRENT_MODE, 0),
+        "leak_truth": int(stats["max_leak_truth"]),
+        "leak_detected": int(stats["max_leak_detected"]),
     }
 
 # ---------------------------------------------------------------------
@@ -124,25 +139,44 @@ def on_local_message(client, userdata, msg):
     
     try:
         payload = json.loads(msg.payload.decode())
+        payload["run_id"] = payload.get("run_id", RUN_ID)
+        payload["scenario"] = payload.get("scenario", SCENARIO)
+        payload["sample_kind"] = payload.get("sample_kind", "raw")
+        payload["leak_truth"] = int(payload.get("leak_truth", 0))
         
         # 1. Immediate Leak Check (Safety Critical)
-        if detect_leak(payload):
+        leak_detected = 1 if detect_leak(payload) else 0
+        payload["leak_detected"] = leak_detected
+
+        if leak_detected == 1:
             log.warning(f"LEAK DETECTED on {payload.get('device_id')}! Sending ALERT.")
             m_leaks.inc()
             # Priority Upload
             alert_payload = payload.copy()
             alert_payload["alert_type"] = "LEAK_DETECTED"
+            alert_payload["sample_kind"] = "status"
+            alert_payload["mode_code"] = MODE_CODE.get(CURRENT_MODE, 0)
             central_client.publish(f"{CENTRAL_TOPIC_DATA}/{SITE_ID}", json.dumps(alert_payload), qos=1)
             
         # 2. Routing based on Mode
         if CURRENT_MODE == "DEBUG":
             # Passthrough Mode: Send everything raw
+            payload["mode"] = CURRENT_MODE
+            payload["mode_code"] = MODE_CODE.get(CURRENT_MODE, 0)
             central_client.publish(f"{CENTRAL_TOPIC_DATA}/{SITE_ID}", json.dumps(payload))
             m_egress.inc()
         else:
-            # Aggregation Mode: Buffer it
+            # Aggregation Mode: Streaming stats (memory-safe)
             with buffer_lock:
-                data_buffer[payload.get("device_id")].append(payload)
+                device_id = payload.get("device_id")
+                stats = data_buffer[device_id]
+                stats["count"] += 1
+                stats["sum_pressure"] += float(payload.get("pressure_psi", 0))
+                stats["sum_flow"] += float(payload.get("flow_gpm", 0))
+                stats["sum_level"] += float(payload.get("tank_level_pct", 0))
+                stats["max_leak_truth"] = max(stats["max_leak_truth"], int(payload.get("leak_truth", 0)))
+                stats["max_leak_detected"] = max(stats["max_leak_detected"], int(payload.get("leak_detected", 0)))
+                stats["last_record"] = payload
                 
     except Exception as e:
         log.error(f"Error processing local msg: {e}")
@@ -177,10 +211,10 @@ def on_central_message(client, userdata, msg):
 def aggregation_worker():
     while True:
         # Dynamic Sleep based on Mode
-        # NORMAL: 60s, ECONOMY: 300s (5 mins), DEBUG: 1s (or skip)
+        # NORMAL: 1s, ECONOMY: 300s (5 mins), DEBUG: 1s (or skip)
         target_window = AGGREGATION_WINDOW
         if CURRENT_MODE == "ECONOMY":
-            target_window = 300
+            target_window = ECONOMY_WINDOW
         elif CURRENT_MODE == "DEBUG":
             target_window = 1
 
@@ -201,11 +235,8 @@ def aggregation_worker():
             snapshot = data_buffer.copy()
             data_buffer.clear()
             
-        for device_id, records in snapshot.items():
-            if not records:
-                continue
-                
-            agg_record = aggregate_data(device_id, records)
+        for device_id, stats in snapshot.items():
+            agg_record = aggregate_data(device_id, stats)
             if agg_record:
                 central_client.publish(f"{CENTRAL_TOPIC_DATA}/{SITE_ID}", json.dumps(agg_record))
                 m_egress.inc()

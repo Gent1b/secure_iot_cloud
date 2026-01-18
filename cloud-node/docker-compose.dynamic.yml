@@ -33,6 +33,8 @@ services:
       MQTT_TOPIC: "iot/data/#"
       # THESIS ALIGNMENT: Trust edge detection in dynamic scenario
       DEPLOYMENT_MODE: "edge"
+      RUN_ID: "${RUN_ID:-run_unknown}"
+      SCENARIO: "${SCENARIO:-adaptive}"
     ports:
       - "8000:8000"
     depends_on:
@@ -54,6 +56,12 @@ services:
       INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
       PROMETHEUS_URL: "${PROMETHEUS_URL:-http://10.0.0.5:9090}"
+      RUN_ID: "${RUN_ID:-run_unknown}"
+      SCENARIO: "${SCENARIO:-adaptive}"
+      CPU_HIGH: "${CPU_HIGH:-80}"
+      CPU_LOW: "${CPU_LOW:-20}"
+      MEM_HIGH: "${MEM_HIGH:-85}"
+      MEM_LOW: "${MEM_LOW:-65}"
     depends_on:
       - influxdb
       - subscriber

@@ -33,6 +33,8 @@ services:
       MQTT_TOPIC: "iot/devices"
       # THESIS ALIGNMENT: Cloud detects leaks in baseline scenario
       DEPLOYMENT_MODE: "centralized"
+      RUN_ID: "${RUN_ID:-run_unknown}"
+      SCENARIO: "${SCENARIO:-baseline}"
     ports:
       - "8000:8000"
     depends_on:

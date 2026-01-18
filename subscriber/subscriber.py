@@ -23,6 +23,9 @@ INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "local_token_123")
 INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "secure_iot")
 INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "iot_data")
 
+RUN_ID = os.getenv("RUN_ID", "run_unknown")
+SCENARIO = os.getenv("SCENARIO", "unknown")
+
 # Tunables
 SUBSCRIBER_QUEUE_MAX = int(os.getenv("SUBSCRIBER_QUEUE_MAX", "10000"))
 INFLUX_BATCH_SIZE = int(os.getenv("INFLUX_BATCH_SIZE", "50"))
@@ -101,20 +104,23 @@ def process_water_sim_data(data, mqtt_receipt_time):
        bool is_alert (Critical event?)
     """
     # Thesis Metrics: Latency breakdown
+    staleness_s = None
     try:
         if "timestamp" in data:
             sensor_time = float(data["timestamp"])
             current_time = time.time()
-            
+
             # Network latency: Time data spent in transit
             net_latency = mqtt_receipt_time - sensor_time
             if net_latency > 0:
                 network_latency.observe(net_latency)
-            
+
             # End-to-end latency: Total time from sensor to now
             e2e_latency = current_time - sensor_time
             if e2e_latency > 0:
                 end_to_end_latency.observe(e2e_latency)
+
+            staleness_s = max(0.0, mqtt_receipt_time - sensor_time)
     except Exception:
         pass
 
@@ -136,28 +142,29 @@ def process_water_sim_data(data, mqtt_receipt_time):
     # - EDGE: Cloud trusts edge-provided leak_flag (no re-computation)
     
     is_alert = False
-    
+
     if DEPLOYMENT_MODE == "centralized":
         # Baseline Scenario: Cloud performs leak detection
         expected_flow = pressure * valve * 0.05
         if valve > 10 and flow > (expected_flow + 15.0):
-            final_leak_flag = 1
+            leak_detected = 1
             leaks_detected.inc()
             is_alert = True
             log.warning(f"[CLOUD DETECTION] Leak detected on {device_id}")
         else:
-            final_leak_flag = 0
+            leak_detected = 0
     else:
-        # Edge Scenarios: Trust edge-provided leak_flag
-        final_leak_flag = int(data.get("leak_flag", 0))
-        if final_leak_flag == 1:
+        # Edge Scenarios: Trust edge-provided leak_detected
+        leak_detected = int(data.get("leak_detected", 0))
+        if leak_detected == 1:
             leaks_detected.inc()  # Count for metrics only
             is_alert = True
 
     return {
         "pressure_avg": round(avg_pressure, 2),
         "flow_avg": round(avg_flow, 2),
-        "leak_flag": final_leak_flag,
+        "leak_detected": leak_detected,
+        "staleness_s": staleness_s,
     }, is_alert
 
 # ---------------------------------------------------------------------
@@ -184,6 +191,9 @@ def worker():
             data = json.loads(payload_str)
             device_id = data.get("device_id")
             site_id = data.get("site_id", "unknown")
+            run_id = data.get("run_id", RUN_ID)
+            scenario = data.get("scenario", SCENARIO)
+            sample_kind = data.get("sample_kind", "raw")
             
             # --- Processing ---
             features, is_alert = process_water_sim_data(data, mqtt_receipt_time)
@@ -193,7 +203,10 @@ def worker():
             
             p = Point("water_pipeline") \
                 .tag("device_id", device_id) \
-                .tag("site_id", site_id)
+                .tag("site_id", site_id) \
+                .tag("run_id", run_id) \
+                .tag("scenario", scenario) \
+                .tag("sample_kind", sample_kind)
             
             # Capture Edge Alerts if present
             if "alert_type" in data:
@@ -203,9 +216,16 @@ def worker():
                 .field("flow_gpm", float(data["flow_gpm"])) \
                 .field("valve_position", float(data["valve_position"])) \
                 .field("pump_status", int(data["pump_status"])) \
-                .field("tank_level", float(data["tank_level_pct"])) \
+                .field("tank_level_pct", float(data["tank_level_pct"])) \
                 .field("pressure_avg", float(features["pressure_avg"])) \
-                .field("leak_flag", int(features["leak_flag"]))
+                .field("flow_avg", float(features["flow_avg"])) \
+                .field("leak_truth", int(data.get("leak_truth", 0))) \
+                .field("leak_detected", int(features["leak_detected"]))
+
+            if data.get("mode_code") is not None:
+                p.field("mode_code", int(data.get("mode_code")))
+            if features.get("staleness_s") is not None:
+                p.field("staleness_s", float(features.get("staleness_s")))
             
             batch.append(p)
             

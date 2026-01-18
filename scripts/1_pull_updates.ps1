@@ -4,7 +4,7 @@
 
 $HOSTS = @("mqtt", "monitor", "cloud", "devices")
 $REPO_DIR = "/root/secure_iot_cloud"
-$BRANCH = "edge-branch"
+$BRANCH = "edge-branch-refined"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " 1. GIT PULL (All Nodes)"

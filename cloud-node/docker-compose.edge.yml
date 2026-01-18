@@ -27,6 +27,9 @@ services:
       INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
       MODE: "CLOUD"
       MQTT_TOPIC: "iot/data/#"
+      DEPLOYMENT_MODE: "edge"
+      RUN_ID: "${RUN_ID:-run_unknown}"
+      SCENARIO: "${SCENARIO:-static}"
     ports:
       - "8000:8000"
     depends_on:
