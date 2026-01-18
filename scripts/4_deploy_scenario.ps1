@@ -52,6 +52,10 @@ if ($Scenario -eq "static") {
 # --- SCENARIO C: DYNAMIC EDGE ---
 if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Dynamic Edge (Feedback Loop)..."
+
+    $RUN_ID = "dynamic-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $SCENARIO_TAG = "adaptive"
+    Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
     # 1. MQTT
     Write-Host ">>> Starting MQTT broker..." -ForegroundColor Yellow
@@ -63,11 +67,11 @@ if ($Scenario -eq "dynamic") {
     
     # 3. Cloud (Dynamic Mode + Controller)
     Write-Host ">>> Starting Cloud services (subscriber + controller)..." -ForegroundColor Yellow
-    ssh cloud "cd $REPO_DIR/cloud-node; docker compose -f docker-compose.dynamic.yml up -d"
+    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.dynamic.yml up -d"
     
     # 4. Devices (K3s Dynamic)
     Write-Host ">>> Deploying edge agents to K3s..." -ForegroundColor Yellow
-    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic; sed -i 's/\r$//' deploy.sh; sed -i 's/\r$//' ../02_edge_static/deploy.sh; chmod +x ../02_edge_static/deploy.sh; chmod +x deploy.sh; ./deploy.sh"
+    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic; sed -i 's/\r$//' deploy.sh; sed -i 's/\r$//' ../02_edge_static/deploy.sh; chmod +x ../02_edge_static/deploy.sh; chmod +x deploy.sh; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
 }
 
 Write-Host "✅ Deployment command sent. Check Grafana/InfluxDB for data." -ForegroundColor Green
