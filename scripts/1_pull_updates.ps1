@@ -21,16 +21,16 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " 1. GIT PULL (All Nodes)"
 Write-Host "========================================" -ForegroundColor Cyan
 
-foreach ($H in $HOSTS) {
+foreach ($H in $Hosts) {
     Write-Host ">>> Updating $H..." -ForegroundColor Yellow
     
     # Reset to remote branch (handles force-pushes and divergent branches)
     ssh $H "cd $RepoDir; git fetch origin; git checkout $Branch; git reset --hard origin/$Branch"
     
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ $H updated." -ForegroundColor Green
+        Write-Host "OK  $H updated." -ForegroundColor Green
     } else {
-        Write-Host "❌ $H update failed." -ForegroundColor Red
+        Write-Host "ERR $H update failed." -ForegroundColor Red
     }
 }
 
@@ -39,13 +39,13 @@ Write-Host " 2. DEPLOY ENVIRONMENT FILE"
 Write-Host "========================================" -ForegroundColor Cyan
 
 if (-not $DeployEnv) {
-    Write-Host "(Skipping .env deploy — run with -DeployEnv to enable)" -ForegroundColor DarkGray
+    Write-Host "(Skipping .env deploy - run with -DeployEnv to enable)" -ForegroundColor DarkGray
     return
 }
 
 if (-not (Test-Path -LiteralPath $EnvPath)) {
-    Write-Host "❌ Env file not found: $EnvPath" -ForegroundColor Red
-    Write-Host "   Tip: create it locally or pass -EnvPath <path>" -ForegroundColor DarkGray
+    Write-Host "ERR Env file not found: $EnvPath" -ForegroundColor Red
+    Write-Host "    Tip: create it locally or pass -EnvPath PATH" -ForegroundColor DarkGray
     exit 1
 }
 
@@ -56,10 +56,10 @@ foreach ($H in $Hosts) {
     scp $EnvPath ${H}:$RemoteEnvDir/.env
 
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ $H .env deployed." -ForegroundColor Green
+        Write-Host "OK  $H .env deployed." -ForegroundColor Green
     } else {
-        Write-Host "❌ $H .env deploy failed." -ForegroundColor Red
+        Write-Host "ERR $H .env deploy failed." -ForegroundColor Red
     }
 }
 
-Write-Host "✅ All nodes updated; env deploy finished." -ForegroundColor Green
+Write-Host "OK  All nodes updated; env deploy finished." -ForegroundColor Green

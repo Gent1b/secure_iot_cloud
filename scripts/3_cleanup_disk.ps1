@@ -22,7 +22,7 @@ foreach ($H in $Hosts) {
     # Some nodes (e.g., k3s/containerd) may not have Docker.
     ssh $H "if command -v docker >/dev/null 2>&1; then docker system prune -a -f --volumes; else echo 'docker not found; skipping docker prune'; fi"
     
-    # Show free space
-    $SPACE = ssh $H "df -h / | tail -n 1 | awk '{print \$4}'"
-    Write-Host "✅ $H cleaned. Free Space: $SPACE" -ForegroundColor Green
+    # Show free space (avoid awk/$ escaping issues over SSH)
+    $SPACE = ssh $H "df -h / | tail -n 1 | tr -s ' ' | cut -d ' ' -f4"
+    Write-Host "OK  $H cleaned. Free Space: $SPACE" -ForegroundColor Green
 }
