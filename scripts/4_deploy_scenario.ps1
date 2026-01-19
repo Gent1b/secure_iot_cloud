@@ -36,8 +36,8 @@ if ($Scenario -eq "baseline") {
     # 2. Monitoring
     ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
-    # 3. Cloud (Standard)
-    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.yml up -d"
+    # 3. Cloud (Standard) - source env first
+    ssh cloud "set -a; source /opt/iot/.env; set +a; cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.yml up -d"
     
     # 4. Devices (Docker) - Set environment variables for baseline
     ssh devices "cd $REPO_DIR/device-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose up -d"
@@ -57,8 +57,8 @@ if ($Scenario -eq "static") {
     # 2. Monitoring
     ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
-    # 3. Cloud (Edge Mode)
-    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.edge.yml up -d"
+    # 3. Cloud (Edge Mode) - source env first
+    ssh cloud "set -a; source /opt/iot/.env; set +a; cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.edge.yml up -d"
     
     # 4. Devices (K3s)
     # Ensure script is executable and run it (fix line endings first)
@@ -81,9 +81,9 @@ if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Monitoring stack..." -ForegroundColor Yellow
     ssh monitor "cd $REPO_DIR/monitoring-node; docker compose up -d"
     
-    # 3. Cloud (Dynamic Mode + Controller)
+    # 3. Cloud (Dynamic Mode + Controller) - source env first
     Write-Host ">>> Starting Cloud services (subscriber + controller)..." -ForegroundColor Yellow
-    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.dynamic.yml up -d"
+    ssh cloud "set -a; source /opt/iot/.env; set +a; cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.dynamic.yml up -d"
     
     # 4. Devices (K3s Dynamic)
     Write-Host ">>> Deploying edge agents to K3s..." -ForegroundColor Yellow
