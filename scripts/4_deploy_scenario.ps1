@@ -1,11 +1,19 @@
-# 4_deploy_scenario.ps1
-# Deploys one of the 3 thesis scenarios.
-# Usage: .\scripts\4_deploy_scenario.ps1 -Scenario [baseline|static|dynamic]
+<#
+4_deploy_scenario.ps1
+Deploys one of the 3 thesis scenarios.
+
+Usage:
+    .\scripts\4_deploy_scenario.ps1 -Scenario baseline
+    .\scripts\4_deploy_scenario.ps1 -Scenario static
+    .\scripts\4_deploy_scenario.ps1 -Scenario dynamic
+#>
 
 param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("baseline", "static", "dynamic")]
-    [string]$Scenario
+    [string]$Scenario,
+
+    [string]$RunId
 )
 
 $REPO_DIR = "/root/secure_iot_cloud"
@@ -18,7 +26,7 @@ Write-Host "========================================" -ForegroundColor Green
 if ($Scenario -eq "baseline") {
     Write-Host ">>> Starting Baseline (Docker on all nodes)..."
 
-    $RUN_ID = "baseline-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $RUN_ID = if ($RunId) { $RunId } else { "baseline-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
     $SCENARIO_TAG = "baseline"
     Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
@@ -39,7 +47,7 @@ if ($Scenario -eq "baseline") {
 if ($Scenario -eq "static") {
     Write-Host ">>> Starting Static Edge (K3s on Devices)..."
 
-    $RUN_ID = "static-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $RUN_ID = if ($RunId) { $RunId } else { "static-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
     $SCENARIO_TAG = "static"
     Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
@@ -54,14 +62,14 @@ if ($Scenario -eq "static") {
     
     # 4. Devices (K3s)
     # Ensure script is executable and run it (fix line endings first)
-    ssh devices "cd $REPO_DIR/deployments/02_edge_static && sed -i 's/\r$//' deploy.sh && chmod +x deploy.sh && RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
+    ssh devices "cd $REPO_DIR/deployments/02_edge_static; sed -i 's/\r$//' deploy.sh; chmod +x deploy.sh; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
 }
 
 # --- SCENARIO C: DYNAMIC EDGE ---
 if ($Scenario -eq "dynamic") {
     Write-Host ">>> Starting Dynamic Edge (Feedback Loop)..."
 
-    $RUN_ID = "dynamic-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $RUN_ID = if ($RunId) { $RunId } else { "dynamic-" + (Get-Date -Format "yyyyMMdd-HHmmss") }
     $SCENARIO_TAG = "adaptive"
     Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
@@ -79,7 +87,7 @@ if ($Scenario -eq "dynamic") {
     
     # 4. Devices (K3s Dynamic)
     Write-Host ">>> Deploying edge agents to K3s..." -ForegroundColor Yellow
-    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic; sed -i 's/\r$//' deploy.sh; sed -i 's/\r$//' ../02_edge_static/deploy.sh; chmod +x ../02_edge_static/deploy.sh; chmod +x deploy.sh; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
+    ssh devices "cd $REPO_DIR/deployments/03_edge_dynamic; sed -i 's/\r$//' deploy.sh; chmod +x deploy.sh; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
 }
 
 Write-Host "✅ Deployment command sent. Check Grafana/InfluxDB for data." -ForegroundColor Green

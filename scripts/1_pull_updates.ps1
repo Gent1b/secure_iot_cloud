@@ -1,10 +1,21 @@
-# 1_pull_updates.ps1
-# Pulls the latest code from GitHub on all VMs.
-# Usage: .\scripts\1_pull_updates.ps1
+<#
+1_pull_updates.ps1
+Pulls the latest code from GitHub on all VMs and (optionally) deploys the local .env.
 
-$HOSTS = @("mqtt", "monitor", "cloud", "devices")
-$REPO_DIR = "/root/secure_iot_cloud"
-$BRANCH = "edge-branch-refined"
+Usage:
+    .\scripts\1_pull_updates.ps1
+    .\scripts\1_pull_updates.ps1 -Branch edge-branch-refined -DeployEnv
+#>
+
+[CmdletBinding()]
+param(
+        [string[]]$Hosts = @("mqtt", "monitor", "cloud", "devices"),
+        [string]$RepoDir = "/root/secure_iot_cloud",
+        [string]$Branch = "edge-branch-refined",
+        [switch]$DeployEnv,
+        [string]$EnvPath = ".env",
+        [string]$RemoteEnvDir = "/opt/iot"
+)
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " 1. GIT PULL (All Nodes)"
@@ -14,7 +25,7 @@ foreach ($H in $HOSTS) {
     Write-Host ">>> Updating $H..." -ForegroundColor Yellow
     
     # Reset to remote branch (handles force-pushes and divergent branches)
-    ssh $H "cd $REPO_DIR && git fetch origin && git checkout $BRANCH && git reset --hard origin/$BRANCH"
+    ssh $H "cd $RepoDir; git fetch origin; git checkout $Branch; git reset --hard origin/$Branch"
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✅ $H updated." -ForegroundColor Green
@@ -27,11 +38,28 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host " 2. DEPLOY ENVIRONMENT FILE"
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Deploy .env from local machine to ALL nodes via SCP
-Write-Host ">>> Deploying .env to all nodes..." -ForegroundColor Yellow
-foreach ($H in $HOSTS) {
-    ssh $H "mkdir -p /opt/iot"
-    scp .env ${H}:/opt/iot/.env
+if (-not $DeployEnv) {
+    Write-Host "(Skipping .env deploy — run with -DeployEnv to enable)" -ForegroundColor DarkGray
+    return
 }
 
-Write-Host "✅ All nodes updated and .env deployed." -ForegroundColor Green
+if (-not (Test-Path -LiteralPath $EnvPath)) {
+    Write-Host "❌ Env file not found: $EnvPath" -ForegroundColor Red
+    Write-Host "   Tip: create it locally or pass -EnvPath <path>" -ForegroundColor DarkGray
+    exit 1
+}
+
+# Deploy .env from local machine to ALL nodes via SCP
+Write-Host ">>> Deploying $EnvPath to all nodes..." -ForegroundColor Yellow
+foreach ($H in $Hosts) {
+    ssh $H "mkdir -p $RemoteEnvDir"
+    scp $EnvPath ${H}:$RemoteEnvDir/.env
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✅ $H .env deployed." -ForegroundColor Green
+    } else {
+        Write-Host "❌ $H .env deploy failed." -ForegroundColor Red
+    }
+}
+
+Write-Host "✅ All nodes updated; env deploy finished." -ForegroundColor Green
