@@ -17,6 +17,10 @@ Write-Host "========================================" -ForegroundColor Green
 # --- SCENARIO A: BASELINE ---
 if ($Scenario -eq "baseline") {
     Write-Host ">>> Starting Baseline (Docker on all nodes)..."
+
+    $RUN_ID = "baseline-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $SCENARIO_TAG = "baseline"
+    Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
@@ -25,15 +29,19 @@ if ($Scenario -eq "baseline") {
     ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
     # 3. Cloud (Standard)
-    ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.yml up -d"
+    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.yml up -d"
     
     # 4. Devices (Docker) - Set environment variables for baseline
-    ssh devices "cd $REPO_DIR/device-node && BROKER=34.185.144.185 MQTT_TOPIC=iot/devices DEVICES_PER_CONTAINER=10 PUBLISH_INTERVAL=0.02 docker compose up -d"
+    ssh devices "cd $REPO_DIR/device-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose up -d"
 }
 
 # --- SCENARIO B: STATIC EDGE ---
 if ($Scenario -eq "static") {
     Write-Host ">>> Starting Static Edge (K3s on Devices)..."
+
+    $RUN_ID = "static-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $SCENARIO_TAG = "static"
+    Write-Host ">>> RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG" -ForegroundColor Cyan
     
     # 1. MQTT
     ssh mqtt "cd $REPO_DIR/mqtt-node && docker compose up -d"
@@ -42,11 +50,11 @@ if ($Scenario -eq "static") {
     ssh monitor "cd $REPO_DIR/monitoring-node && docker compose up -d"
     
     # 3. Cloud (Edge Mode)
-    ssh cloud "cd $REPO_DIR/cloud-node && docker compose -f docker-compose.edge.yml up -d"
+    ssh cloud "cd $REPO_DIR/cloud-node; RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG docker compose -f docker-compose.edge.yml up -d"
     
     # 4. Devices (K3s)
     # Ensure script is executable and run it (fix line endings first)
-    ssh devices "cd $REPO_DIR/deployments/02_edge_static && sed -i 's/\r$//' deploy.sh && chmod +x deploy.sh && ./deploy.sh"
+    ssh devices "cd $REPO_DIR/deployments/02_edge_static && sed -i 's/\r$//' deploy.sh && chmod +x deploy.sh && RUN_ID=$RUN_ID SCENARIO=$SCENARIO_TAG ./deploy.sh"
 }
 
 # --- SCENARIO C: DYNAMIC EDGE ---

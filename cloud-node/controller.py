@@ -65,6 +65,10 @@ CPU_LOW = float(os.getenv("CPU_LOW", 20.0))
 MEM_HIGH = float(os.getenv("MEM_HIGH", 85.0))
 MEM_LOW = float(os.getenv("MEM_LOW", 65.0))
 
+# Optional: if disabled, the controller will NOT request DEBUG just because the cloud is idle.
+# This keeps traffic minimal unless a leak is detected or resources are constrained.
+ENABLE_OPPORTUNISTIC_DEBUG = os.getenv("ENABLE_OPPORTUNISTIC_DEBUG", "0").strip().lower() in ("1", "true", "yes", "y")
+
 # ---------------------------------------------------------------------
 # MQTT Client
 # ---------------------------------------------------------------------
@@ -254,8 +258,8 @@ def enforce_fairness(site_states, cloud_cpu, cloud_mem):
                 "leak_detected": 0,
             }
             
-    # SCENARIO 4: CLOUD IDLE (Resource Maximization)
-    elif avg_cpu < CPU_LOW and avg_mem < MEM_LOW:
+    # SCENARIO 4: CLOUD IDLE (Resource Maximization) - optional
+    elif ENABLE_OPPORTUNISTIC_DEBUG and avg_cpu < CPU_LOW and avg_mem < MEM_LOW:
         log.info(f"SCENARIO: CLOUD IDLE (avg_cpu={avg_cpu:.1f}%, avg_mem={avg_mem:.1f}%). Requesting High-Fidelity Data.")
         for site in SITES:
             new_mode = "DEBUG" # Send everything! We have space.

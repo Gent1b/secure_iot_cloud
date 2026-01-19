@@ -652,12 +652,12 @@ same time, and you could compare their outputs directly in Grafana by selecting 
 might be tricky but not impossible (you’d basically run three publisher/edge sets, one with edge
 agent bypassed, etc.). It might not be worth the complexity for a live demo, but for data gathering
 it’s an idea.
-Use the Python analysis script for comparisons: Your generate_thesis_figures.py likely
-does exactly this: it probably queries data for each scenario (maybe from CSV logs or Influx queries)
-and then produces comparative plots, like overlayed lines or bar charts. Rely on that for the final
-figures in your thesis document or slides. Grafana can be used during the presentation to
-demonstrate the system behavior in one scenario (adaptive) – which is compelling to watch live –
-but for quantitative comparison, a pre-made figure is clearer.
+Use offline analysis for comparisons: export runs from InfluxDB (filtered by `run_id`/`scenario`) and
+produce comparative plots/tables from the exported dataset. In this repo, prefer the run-based tools
+in `scripts/` (for example `export_run_data.py` and `evaluate_runs.py`) rather than ad-hoc plotting.
+Grafana is best used during the presentation to demonstrate the system behavior in one scenario
+(adaptive) – which is compelling to watch live – but for quantitative comparison, a pre-made figure
+is clearer.
 One approach is: run all three scenarios with identical conditions, export their data (influx query or your
 script collects it), then produce the 3-scenario comparison plots. Those plots would include e.g. the
 bandwidth usage comparison and the leak zoom-in comparison we discussed.
@@ -686,8 +686,8 @@ architecture does support many sites (it’s in the design), but you might not h
 concurrently. If time permits, consider demonstrating two sites simultaneously: e.g., plant-a with a
 leak, and plant-b without a leak. The controller’s fairness policy would then, according to Priority 1,
 set plant-a to DEBUG (because it has a leak), while plant-b could remain Normal or go Economy if
-CPU is an issue. This would show that non-affected sites don’t unnecessarily jump to high-rate
-(unless idle mode triggers them) and that the controller can target commands per site. If it’s too late
+CPU is an issue. This would show that non-affected sites don’t unnecessarily jump to high-rate and
+that the controller can target commands per site. If it’s too late
 to do this, it’s fine – you can state the system is extensible to N sites and discuss how the controller
 would handle competing leaks (e.g., if two leaks happen, both go DEBUG unless CPU is so limited
 ## •

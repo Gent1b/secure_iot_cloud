@@ -31,10 +31,10 @@ The project implements three distinct scenarios to validate the thesis hypothesi
     *   No local intelligence (if network fails, data is lost).
 
 ### Scenario B: Static Edge (Bandwidth Reduction)
-*   **Logic**: Edge Nodes (K3s) intercept raw data, compute 1-minute averages, and send only the aggregate to the Cloud.
+*   **Logic**: Edge Nodes (K3s) intercept raw data, compute 1-second aggregates (1 Hz output), and send only the aggregate to the Cloud.
 *   **Data Flow**: `Sensor -> Local K3s -> Aggregator -> Internet -> Cloud DB`
 *   **Expected Behavior**:
-    *   **98% Bandwidth Reduction** (1 message/min vs 3000/min).
+*   **~98% Bandwidth Reduction** (1 Hz vs 50 Hz).
     *   Cloud CPU usage drops significantly.
     *   "Leak Alerts" are still sent immediately (priority bypass).
 
@@ -42,11 +42,12 @@ The project implements three distinct scenarios to validate the thesis hypothesi
 *   **Logic**: A **Cloud Controller** monitors the system and dynamically commands Edge Nodes to change their reporting mode.
 *   **Feedback Algorithm**:
     1.  **Leak Detected?** -> Command specific site to `DEBUG` mode (50Hz raw data).
-    2.  **Cloud Idle?** -> Command all sites to `DEBUG` mode (utilize spare capacity).
-    3.  **Cloud Congested?** -> Command all sites to `ECONOMY` mode (throttle).
+    2.  **High Cloud Memory?** -> Command non-leak sites to `ECONOMY` mode (hard constraint).
+    3.  **High Cloud CPU?** -> Command non-leak sites to `ECONOMY` mode (soft constraint).
+    4.  Otherwise -> Keep sites in `NORMAL` mode (1 Hz aggregation).
 *   **Expected Behavior**:
-    *   System starts in `DEBUG` mode (if cloud is idle).
-    *   If you simulate a leak, that specific site stays high-res while others might throttle.
+*   System runs in `NORMAL` by default.
+    *   If you simulate a leak, that specific site goes high-res while others may throttle.
     *   Demonstrates "Fairness" and "Resource Awareness".
 
 ---
@@ -101,7 +102,7 @@ Access Grafana at `http://<monitoring-vm-ip>:3000`.
 Access InfluxDB at `http://<cloud-vm-ip>:8086`.
 *   **Bucket**: `iot_data`
 *   **Measurement**: `water_pipeline`
-*   **Check**: Look for the `mode` tag. In Dynamic scenario, you should see it change between `NORMAL`, `DEBUG`, and `ECONOMY`.
+*   **Check**: Look for the `mode_code` field (0=NORMAL, 1=DEBUG, 2=ECONOMY) and tags like `run_id`, `scenario`, `site_id`, `sample_kind`.
 
 ### Troubleshooting
 If something isn't working:

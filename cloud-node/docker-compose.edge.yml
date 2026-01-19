@@ -19,12 +19,14 @@ services:
       context: ../subscriber
     image: iot-subscriber:local
     pull_policy: never
+    env_file:
+      - /opt/iot/.env
     environment:
-      BROKER: "${BROKER:-54.93.230.47}"
-      INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
-      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-my-token}"
-      INFLUXDB_ORG: "${INFLUXDB_ORG:-my-org}"
-      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
+      BROKER: "${BROKER}"
+      INFLUXDB_URL: "${INFLUXDB_URL}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
       MODE: "CLOUD"
       MQTT_TOPIC: "iot/data/#"
       DEPLOYMENT_MODE: "edge"

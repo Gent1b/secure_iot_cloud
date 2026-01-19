@@ -13,14 +13,14 @@ After deploying the **Dynamic Scenario**, you can monitor the system through:
 ## 2. System States
 
 The system operates in three modes for each plant:
-*   **NORMAL:** Standard operation (1-minute aggregation).
-*   **DEBUG:** High-frequency mode (Raw data), triggered by Leaks or Low Cloud Load.
-*   **ECONOMY:** Bandwidth-saving mode (5-minute aggregation), triggered by High Cloud Load.
+*   **NORMAL:** Standard operation (1 Hz aggregation).
+*   **DEBUG:** High-frequency mode (50 Hz passthrough), triggered by `leak_detected`.
+*   **ECONOMY:** Bandwidth-saving mode (1 / 5 min aggregation), triggered by cloud resource constraints.
 
 ## 3. Step-by-Step Demo Script
 
-1.  **Baseline:** Monitor Grafana dashboards. All sites should be in **NORMAL** mode (or DEBUG if cloud is idle).
-2.  **Trigger Leak:** Use the publisher or edge agent to inject a leak event.
+1.  **Baseline:** Monitor Grafana dashboards. All sites should be in **NORMAL** mode.
+2.  **Trigger Leak:** Use the publisher (deterministic leak window) and wait for the leak interval.
 3.  **Observe Reaction:**
     *   Watch Grafana metrics for Plant A to show leak detection.
     *   Subscribe to MQTT topic `iot/control/plant-a` to see the JSON command: `{"mode": "DEBUG"}`.

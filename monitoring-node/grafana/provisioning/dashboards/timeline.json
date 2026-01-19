@@ -36,23 +36,41 @@
       },
       {
         "type": "query",
+        "name": "run_id",
+        "label": "Run ID (single run)",
+        "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+        "refresh": 2,
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"run_id\", predicate: (r) => r._measurement == \"water_pipeline\")",
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "type": "query",
+        "name": "scenario",
+        "label": "Scenario",
+        "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+        "refresh": 2,
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"scenario\", predicate: (r) => r._measurement == \"water_pipeline\" and r.run_id =~ /^${run_id}$/)",
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "type": "query",
         "name": "site_id",
         "label": "Site",
         "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
         "refresh": 2,
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"site_id\")",
-        "includeAll": true,
-        "allValue": ".*",
-        "multi": true,
-        "current": { "text": "All", "value": ".*" }
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"site_id\", predicate: (r) => r._measurement == \"water_pipeline\" and r.run_id =~ /^${run_id}$/ and r.scenario =~ /^${scenario}$/)",
+        "includeAll": false,
+        "multi": false
       },
       {
         "type": "query",
-        "name": "device_id",
-        "label": "Device",
+        "name": "sample_kind",
+        "label": "Sample Kind",
         "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
         "refresh": 2,
-        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"device_id\")",
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"${bucket}\", tag: \"sample_kind\", predicate: (r) => r._measurement == \"water_pipeline\" and r.run_id =~ /^${run_id}$/ and r.scenario =~ /^${scenario}$/ and r.site_id =~ /^${site_id}$/)",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
@@ -79,7 +97,7 @@
         "hide": false,
         "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "iconColor": "rgba(255, 99, 132, 1)",
-        "query": "increase(controller_decisions_total[15s]) > 0",
+        "query": "increase(controller_decisions_total{site_id=~\"$site_id\"}[15s]) > 0",
         "titleFormat": "Controller decision",
         "textFormat": "{{site_id}} → {{target_mode}} ({{reason}})",
         "tagKeys": "reason,target_mode,site_id",
@@ -98,7 +116,7 @@
 
     {
       "id": 2,
-      "title": "Leak Flag (Ground Truth) — CAUSE",
+      "title": "Leak (Truth vs Detected) — CAUSE (truth is evaluation-only)",
       "type": "timeseries",
       "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
       "gridPos": { "x": 0, "y": 1, "w": 12, "h": 7 },
@@ -114,7 +132,7 @@
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.device_id =~ /^${device_id}$/)\n  |> filter(fn: (r) => r._field == \"leak_flag\")\n  |> aggregateWindow(every: 5s, fn: max, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.sample_kind =~ /^${sample_kind}$/)\n  |> filter(fn: (r) => r._field == \"leak_truth\" or r._field == \"leak_detected\")\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> group(columns: [\"site_id\", \"_field\"])"
         }
       ]
     },
@@ -151,7 +169,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (site_id, target_mode, reason) (increase(controller_decisions_total[$__rate_interval]))",
+          "expr": "sum by (site_id, target_mode, reason) (increase(controller_decisions_total{site_id=~\"$site_id\"}[$__rate_interval]))",
           "legendFormat": "{{site_id}} → {{target_mode}} ({{reason}})"
         }
       ]
@@ -159,15 +177,15 @@
 
     {
       "id": 5,
-      "title": "Edge Operating Mode — ACT (0=ECONOMY, 1=NORMAL, 2=DEBUG)",
+      "title": "Edge Mode (mode_code) — ACT (0=NORMAL, 1=DEBUG, 2=ECONOMY)",
       "type": "state-timeline",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
       "fieldConfig": {
         "defaults": {
           "unit": "none",
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "ECONOMY" }, "1": { "text": "NORMAL" }, "2": { "text": "DEBUG" } } }
+            { "type": "value", "options": { "0": { "text": "NORMAL" }, "1": { "text": "DEBUG" }, "2": { "text": "ECONOMY" } } }
           ]
         },
         "overrides": []
@@ -176,8 +194,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (site_id) (edge_operating_mode)",
-          "legendFormat": "{{site_id}}"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.sample_kind =~ /^${sample_kind}$/)\n  |> filter(fn: (r) => r._field == \"mode_code\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
         }
       ]
     },
@@ -193,15 +210,42 @@
         "overrides": []
       },
       "targets": [
-        { "refId": "A", "expr": "sum by (site_id) (rate(iot_bandwidth_bytes_total[$__rate_interval]))", "legendFormat": "{{site_id}}" },
+        { "refId": "A", "expr": "sum by (instance) (rate(iot_bandwidth_bytes_total[$__rate_interval]))", "legendFormat": "{{instance}}" },
         { "refId": "B", "expr": "sum(rate(iot_bandwidth_bytes_total[$__rate_interval]))", "legendFormat": "TOTAL" }
       ]
     },
 
     {
       "type": "row",
-      "title": "B) Latency & Performance (What your modes cost)",
+      "title": "A2) Controller Audit (Why decisions happened)",
       "gridPos": { "x": 0, "y": 20, "w": 24, "h": 1 },
+      "collapsed": false,
+      "id": 7
+    },
+
+    {
+      "id": 8,
+      "title": "Controller Audit Log — target_mode / reason / cooldown + cpu/memory",
+      "type": "table",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 7 },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"controller_audit\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r._field == \"cpu_pct\" or r._field == \"memory_pct\" or r._field == \"leak_detected\" or r._field == \"cooldown_active\" or r._field == \"current_mode\" or r._field == \"target_mode\" or r._field == \"reason\")\n  |> aggregateWindow(every: 5s, fn: last, createEmpty: false)\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"_time\", \"site_id\", \"cpu_pct\", \"memory_pct\", \"leak_detected\", \"cooldown_active\", \"current_mode\", \"target_mode\", \"reason\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 200)"
+        }
+      ]
+    },
+
+    {
+      "type": "row",
+      "title": "B) Latency & Performance (What your modes cost)",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 1 },
       "collapsed": false,
       "id": 10
     },
@@ -211,7 +255,7 @@
       "title": "End-to-End Latency (p50 / p95) — Sensor → Influx write",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 0, "y": 21, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 29, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
         {
@@ -232,7 +276,7 @@
       "title": "Network vs Processing Latency (p95)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 12, "y": 21, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 29, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
         {
@@ -249,9 +293,24 @@
     },
 
     {
+      "id": 13,
+      "title": "Staleness (Freshness) — EFFECT (staleness_s)",
+      "type": "timeseries",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "x": 0, "y": 36, "w": 24, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.sample_kind =~ /^${sample_kind}$/)\n  |> filter(fn: (r) => r._field == \"staleness_s\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
+        }
+      ]
+    },
+
+    {
       "type": "row",
       "title": "C) Reliability & Backpressure (What breaks under load)",
-      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 1 },
+      "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 },
       "collapsed": false,
       "id": 20
     },
@@ -261,7 +320,7 @@
       "title": "MQTT Message Flow (arrived / buffered / dropped per sec)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 0, "y": 29, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
       "targets": [
         { "refId": "A", "expr": "rate(mqtt_messages_arrived_total[$__rate_interval])", "legendFormat": "arrived/s" },
@@ -275,7 +334,7 @@
       "title": "Subscriber Queue Depth (buffer gauge)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 12, "y": 29, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "none", "min": 0 }, "overrides": [] },
       "targets": [
         { "refId": "A", "expr": "subscriber_queue_depth", "legendFormat": "queue_depth" }
@@ -287,7 +346,7 @@
       "title": "InfluxDB Writes (success vs fail per sec)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 0, "y": 36, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 51, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
       "targets": [
         { "refId": "A", "expr": "rate(influxdb_writes_success_total[$__rate_interval])", "legendFormat": "success/s" },
@@ -300,7 +359,7 @@
       "title": "Edge Egress + Local Leak Detections (per sec)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 12, "y": 36, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 51, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
       "targets": [
         { "refId": "A", "expr": "sum(rate(edge_egress_messages_total[$__rate_interval]))", "legendFormat": "edge_egress/s" },
@@ -311,7 +370,7 @@
     {
       "type": "row",
       "title": "D) Water Telemetry (What the system is monitoring)",
-      "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 },
+      "gridPos": { "x": 0, "y": 58, "w": 24, "h": 1 },
       "collapsed": false,
       "id": 30
     },
@@ -321,12 +380,12 @@
       "title": "Pressure (psi) & Flow (gpm) — per site (mean)",
       "type": "timeseries",
       "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
-      "gridPos": { "x": 0, "y": 44, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 59, "w": 24, "h": 8 },
       "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.device_id =~ /^${device_id}$/)\n  |> filter(fn: (r) => r._field == \"pressure_psi\" or r._field == \"flow_gpm\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\", \"_field\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.sample_kind =~ /^${sample_kind}$/)\n  |> filter(fn: (r) => r._field == \"pressure_psi\" or r._field == \"flow_gpm\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\", \"_field\"])"
         }
       ]
     },
@@ -336,27 +395,27 @@
       "title": "Tank Level (%)",
       "type": "timeseries",
       "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
-      "gridPos": { "x": 0, "y": 52, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 67, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.device_id =~ /^${device_id}$/)\n  |> filter(fn: (r) => r._field == \"tank_level_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.sample_kind =~ /^${sample_kind}$/)\n  |> filter(fn: (r) => r._field == \"tank_level_pct\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
         }
       ]
     },
 
     {
       "id": 33,
-      "title": "Valve Position (%)",
+      "title": "Uplink Mix — Points per 10s by sample_kind (proxy via pressure_psi count)",
       "type": "timeseries",
       "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
-      "gridPos": { "x": 12, "y": 52, "w": 12, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "gridPos": { "x": 12, "y": 67, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
       "targets": [
         {
           "refId": "A",
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r.device_id =~ /^${device_id}$/)\n  |> filter(fn: (r) => r._field == \"valve_position\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"site_id\"])"
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"water_pipeline\")\n  |> filter(fn: (r) => r.run_id =~ /^${run_id}$/)\n  |> filter(fn: (r) => r.scenario =~ /^${scenario}$/)\n  |> filter(fn: (r) => r.site_id =~ /^${site_id}$/)\n  |> filter(fn: (r) => r._field == \"pressure_psi\")\n  |> aggregateWindow(every: 10s, fn: count, createEmpty: false)\n  |> group(columns: [\"sample_kind\"])"
         }
       ]
     },
@@ -364,7 +423,7 @@
     {
       "type": "row",
       "title": "E) Cloud Resource Context (optional but thesis-strong)",
-      "gridPos": { "x": 0, "y": 59, "w": 24, "h": 1 },
+      "gridPos": { "x": 0, "y": 74, "w": 24, "h": 1 },
       "collapsed": false,
       "id": 40
     },
@@ -374,7 +433,7 @@
       "title": "Cloud Memory Usage %",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 0, "y": 60, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 75, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
       "targets": [
         {
@@ -390,7 +449,7 @@
       "title": "Cloud Network Throughput (RX/TX bytes/sec)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "x": 12, "y": 60, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 75, "w": 12, "h": 7 },
       "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
       "targets": [
         {

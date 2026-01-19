@@ -24,11 +24,11 @@ services:
     env_file:
       - /opt/iot/.env
     environment:
-      BROKER: "${BROKER:-10.0.0.4}"
-      INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
-      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
-      INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
-      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
+      BROKER: "${BROKER}"
+      INFLUXDB_URL: "${INFLUXDB_URL}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
       MODE: "CLOUD"
       MQTT_TOPIC: "iot/data/#"
       # THESIS ALIGNMENT: Trust edge detection in dynamic scenario
@@ -50,12 +50,12 @@ services:
     env_file:
       - /opt/iot/.env
     environment:
-      BROKER: "${BROKER:-10.0.0.4}"
-      INFLUXDB_URL: "${INFLUXDB_URL:-http://influxdb:8086}"
-      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN:-local_token_123}"
-      INFLUXDB_ORG: "${INFLUXDB_ORG:-secure_iot}"
-      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET:-iot_data}"
-      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://10.0.0.5:9090}"
+      BROKER: "${BROKER}"
+      INFLUXDB_URL: "${INFLUXDB_URL}"
+      INFLUXDB_TOKEN: "${INFLUXDB_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      INFLUXDB_BUCKET: "${INFLUXDB_BUCKET}"
+      PROMETHEUS_URL: "${PROMETHEUS_URL}"
       RUN_ID: "${RUN_ID:-run_unknown}"
       SCENARIO: "${SCENARIO:-adaptive}"
       CPU_HIGH: "${CPU_HIGH:-80}"

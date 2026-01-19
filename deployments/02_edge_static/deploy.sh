@@ -76,4 +76,28 @@ echo "Applying Kubernetes Manifests..."
 sudo kubectl apply -f "$SCRIPT_DIR/k3s/edge-stack.yaml"
 sudo kubectl apply -f "$SCRIPT_DIR/k3s/publishers.yaml"
 
+# ---------------------------------------------------------------------
+# Standardized Environment Injection (central broker + tags)
+# ---------------------------------------------------------------------
+if [ -f /opt/iot/.env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source /opt/iot/.env
+    set +a
+fi
+
+BROKER_VALUE="${BROKER:-}"
+RUN_ID_VALUE="${RUN_ID:-run_unknown}"
+SCENARIO_VALUE="${SCENARIO:-static}"
+DEVICES_VALUE="${DEVICES_PER_CONTAINER:-10}"
+RATE_HZ_VALUE="${TARGET_RATE_HZ:-50}"
+LEAK_SEED_VALUE="${LEAK_SEED:-42}"
+
+if [ -n "$BROKER_VALUE" ]; then
+    sudo kubectl -n iot-edge set env deployment/edge-agent-site-a CENTRAL_BROKER="$BROKER_VALUE" RUN_ID="$RUN_ID_VALUE" SCENARIO="$SCENARIO_VALUE"
+    sudo kubectl -n iot-edge set env deployment/water-sensors-site-a RUN_ID="$RUN_ID_VALUE" SCENARIO="$SCENARIO_VALUE" DEVICES_PER_CONTAINER="$DEVICES_VALUE" TARGET_RATE_HZ="$RATE_HZ_VALUE" LEAK_SEED="$LEAK_SEED_VALUE"
+else
+    echo "WARNING: BROKER not set in /opt/iot/.env; edge-agent CENTRAL_BROKER not updated."
+fi
+
 echo "✅ Static Edge Deployed. Check status with: sudo kubectl get pods -n iot-edge"

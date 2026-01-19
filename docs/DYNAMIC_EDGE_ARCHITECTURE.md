@@ -9,7 +9,7 @@ This document details the **Dynamic Edge Scenario (Scenario C)**, which represen
 In traditional IoT (Scenario A), devices are "dumb" and send all data to the cloud. In Static Edge (Scenario B), devices are "smart" but rigid (always aggregate).
 
 **Dynamic Edge (Scenario C)** introduces **Adaptability**. The system behaves like a living organism:
-*   **Relaxed State**: When the cloud is idle, devices send high-resolution data for better analytics.
+*   **Relaxed State**: When the system is healthy, devices stay in **NORMAL** (1 Hz aggregation).
 *   **Stressed State**: When the cloud is overloaded, devices automatically throttle down to save resources.
 *   **Emergency State**: If a leak is detected, the specific affected site ignores all throttling rules and sends high-fidelity data immediately.
 
@@ -51,8 +51,8 @@ The architecture is a **3-Layer Hierarchy**:
 2.  **Edge Agent** receives data locally.
 3.  **Edge Agent** checks: *Is this a leak?* (No).
 4.  **Edge Agent** checks: *What is my Mode?* (NORMAL).
-5.  **Action**: Data is **Buffered** in memory.
-6.  **Timer**: Every 60 seconds, the buffer is averaged (Mean Pressure, Mean Flow).
+5.  **Action**: Data is **Aggregated** (streaming) in memory.
+6.  **Timer**: Every 1 second, a single aggregate point is emitted (1 Hz output).
 7.  **Uplink**: One single JSON summary is sent to **Central Broker**.
 8.  **Cloud**: Subscriber saves summary to InfluxDB.
 
@@ -66,11 +66,13 @@ The architecture is a **3-Layer Hierarchy**:
 
 ### Path C: The Feedback Loop (Control)
 1.  **Controller** (Cloud) wakes up every 10 seconds.
-2.  **Input 1**: Queries InfluxDB. *Did we receive a leak alert in the last minute?*
-3.  **Input 2**: Queries Prometheus. *Is Cloud CPU usage > 80%?*
+2.  **Input 1**: Queries InfluxDB. *Did we receive `leak_detected` in the last window?*
+3.  **Input 2**: Queries Prometheus. *Are cloud memory/CPU above thresholds?*
 4.  **Decision**:
-    *   *Case 1 (Leak)*: Send `{"mode": "DEBUG"}` to the specific site.
-    *   *Case 2 (Cloud Overload)*: Send `{"mode": "ECONOMY"}` to all other sites.
+    *   *Case 1 (Leak)*: Send `{"mode": "DEBUG"}` to the specific site (never overridden).
+    *   *Case 2 (High Memory)*: Send `{"mode": "ECONOMY"}` to non-leak sites.
+    *   *Case 3 (High CPU)*: Send `{"mode": "ECONOMY"}` to non-leak sites.
+    *   *Else*: Send `{"mode": "NORMAL"}`.
 5.  **Downlink**: Publishes command to `iot/control/site-a`.
 6.  **Edge Agent** receives command -> Updates global variable `CURRENT_MODE`.
 7.  **Result**: Edge Agent changes its aggregation behavior instantly.
@@ -90,5 +92,5 @@ The architecture is a **3-Layer Hierarchy**:
 | Mode | Description | Aggregation | Use Case |
 | :--- | :--- | :--- | :--- |
 | **DEBUG** | Passthrough | None (0s) | Leak Analysis, System Debugging |
-| **NORMAL** | Standard | Medium (60s) | Day-to-day monitoring |
+| **NORMAL** | Standard | 1s (1 Hz output) | Day-to-day monitoring |
 | **ECONOMY** | Low Power | High (5m) | Cloud Congestion, Cost Saving |
