@@ -56,6 +56,9 @@ foreach ($H in $Hosts) {
     ssh $H "mkdir -p $RemoteEnvDir"
     scp $EnvPath ${H}:$RemoteEnvDir/.env
 
+    # Normalize line endings for Linux shells (CRLF in .env breaks `source`)
+    ssh $H "sed -i 's/\r$//' $RemoteEnvDir/.env 2>/dev/null || true"
+
     if ($LASTEXITCODE -eq 0) {
         Write-Host "OK  $H .env deployed." -ForegroundColor Green
     } else {

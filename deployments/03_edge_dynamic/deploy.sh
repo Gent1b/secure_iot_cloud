@@ -2,6 +2,8 @@
 # deployments/03_edge_dynamic/deploy.sh
 # Deploys the Dynamic Edge Scenario (Feedback Loop)
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
 echo ">>> Deploying Dynamic Edge Scenario..."
 
 RUN_ID_VALUE="${RUN_ID:-run_unknown}"
@@ -21,7 +23,8 @@ RATE_HZ_VALUE="${TARGET_RATE_HZ:-50}"
 LEAK_SEED_VALUE="${LEAK_SEED:-42}"
 
 # Reuse the static deployment logic for the base stack
-../02_edge_static/deploy.sh
+# Call via bash to avoid relying on executable bit.
+bash "$SCRIPT_DIR/../02_edge_static/deploy.sh"
 
 # Override tags for dynamic scenario
 sudo kubectl -n iot-edge set env deployment/edge-agent-site-a RUN_ID="$RUN_ID_VALUE" SCENARIO="$SCENARIO_VALUE"
