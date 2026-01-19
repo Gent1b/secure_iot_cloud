@@ -4,7 +4,8 @@ Pulls the latest code from GitHub on all VMs and (optionally) deploys the local 
 
 Usage:
     .\scripts\1_pull_updates.ps1
-    .\scripts\1_pull_updates.ps1 -Branch edge-branch-refined -DeployEnv
+    .\scripts\1_pull_updates.ps1 -Branch edge-branch-refined
+    .\scripts\1_pull_updates.ps1 -SkipEnv
 #>
 
 [CmdletBinding()]
@@ -12,7 +13,7 @@ param(
         [string[]]$Hosts = @("mqtt", "monitor", "cloud", "devices"),
         [string]$RepoDir = "/root/secure_iot_cloud",
         [string]$Branch = "edge-branch-refined",
-        [switch]$DeployEnv,
+    [switch]$SkipEnv,
         [string]$EnvPath = ".env",
         [string]$RemoteEnvDir = "/opt/iot"
 )
@@ -38,8 +39,8 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host " 2. DEPLOY ENVIRONMENT FILE"
 Write-Host "========================================" -ForegroundColor Cyan
 
-if (-not $DeployEnv) {
-    Write-Host "(Skipping .env deploy - run with -DeployEnv to enable)" -ForegroundColor DarkGray
+if ($SkipEnv) {
+    Write-Host "(Skipping .env deploy - requested via -SkipEnv)" -ForegroundColor DarkGray
     return
 }
 
